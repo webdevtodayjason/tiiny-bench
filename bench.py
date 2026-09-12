@@ -492,6 +492,75 @@ def suite(tok, model, want, meta):
     }
 
 
+def selfcheck(tok):
+    """Prove the install works, in about ten seconds.
+
+    Five things, in the order they fail for a newcomer: can we reach the box,
+    does the key work, is anything loaded, does a real inference come back, and
+    can we write a result. A bad key or an empty box should say so plainly here
+    rather than halfway through a benchmark."""
+    ok = True
+
+    def step(label, passed, detail=""):
+        nonlocal ok
+        ok = ok and passed
+        say(f"  {'ok  ' if passed else 'FAIL'} {label:<34} {detail}")
+
+    say(f"\n  TiinyBench selfcheck   device {HOST}:{GW}\n")
+
+    t0 = time.time()
+    info = api(f"http://{HOST}/api/v1/sys/device_info", tok, timeout=20)
+    step("device reachable", "_error" not in info,
+         info.get("_error", "") or f"TiinyOS {info.get('tiiny_os', '?')}  "
+                                   f"{(time.time()-t0)*1000:.0f}ms")
+
+    cat = api(f"http://{HOST}:{GW}/api/v1/models", tok, timeout=60)
+    n = len(cat.get("data") or [])
+    step("api key accepted", "_error" not in cat and n > 0,
+         cat.get("_error", "") or f"{n} models installed")
+
+    live = running(tok)
+    free, total = npu_free(tok)
+    step("something is loaded", bool(live),
+         (", ".join(m.split("/")[-1] for m in live) or
+          "nothing loaded - load a model in TiinyOS")
+         + (f"   NPU {total - free}/{total}" if total else ""))
+
+    target = None
+    for m in live:
+        meta = next((x for x in (cat.get("data") or []) if x.get("id") == m), {})
+        if meta.get("type") in ("Text Generation", "Image-Text-to-Text"):
+            target = m
+            break
+    if target:
+        r = chat(tok, target, "Reply with the single word: ok", 8)
+        step("inference returns", "error" not in r,
+             r.get("error", "") or
+             f"{target.split('/')[-1]}  {r.get('decode_tok_s', 0):.1f} tok/s  "
+             f"{r.get('wall_s', 0):.2f}s")
+    else:
+        step("inference returns", False,
+             "no chat model loaded; load one to time a real call")
+
+    try:
+        OUT.mkdir(exist_ok=True)
+        probe = OUT / ".selfcheck"
+        probe.write_text("ok")
+        probe.unlink()
+        step("results directory writable", True, str(OUT))
+    except Exception as exc:  # noqa: BLE001
+        step("results directory writable", False, str(exc)[:60])
+
+    say("")
+    if ok:
+        say("  All good. Run one with:   tiiny-bench --label first-run")
+        say("  Or open the app with:     tiiny-bench --serve")
+    else:
+        say("  Something above needs fixing before a benchmark will mean anything.")
+    say("")
+    return 0 if ok else 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="tiiny-bench")
     p.add_argument("--label", help="name this run (required unless --catalog/--report)")
@@ -500,6 +569,8 @@ def main():
                    help="sweep every text model. LOADS AND UNLOADS MODELS.")
     p.add_argument("--model", help="benchmark one model by id. LOADS AND UNLOADS IT.")
     p.add_argument("--catalog", action="store_true", help="list what is installed")
+    p.add_argument("--selfcheck", action="store_true",
+                   help="prove the install works: reach the device, time one real call")
     p.add_argument("--report", action="store_true", help="build report.html from results")
     p.add_argument("--show", help="print a saved result file")
     p.add_argument("--serve", nargs="?", const=8425, type=int, metavar="PORT",
@@ -521,6 +592,8 @@ def main():
 
     tok = key()
 
+    if a.selfcheck:
+        return selfcheck(tok)
     if a.catalog:
         rows = catalog(tok)
         live = set(running(tok))
