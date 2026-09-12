@@ -1,0 +1,51 @@
+{
+  "label": "ornith-npu",
+  "stamp": "20260911-211223",
+  "build": "0.1.29",
+  "host": "192.168.100.94",
+  "suite_version": 2,
+  "models": [
+    {
+      "model": "deepreinforce-ai/Ornith-1.0-35B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 50,
+      "total_size": 18041197148,
+      "elapsed_s": 59.5,
+      "npu_mem_total_mb": 49024.0,
+      "results": {
+        "sustained": {
+          "run": {
+            "wall_s": 59.359,
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 90.85,
+            "decode_tok_s": 25.59,
+            "prefill_ms": 495.3,
+            "ttft_s": 0.534,
+            "cached_tokens": 0
+          },
+          "telemetry_before": {
+            "npu_util_pct": 0.0,
+            "npu_mem_used_mb": 34512.8,
+            "npu_mem_total_mb": 49024.0,
+            "cpu_total_pct": 19.8
+          },
+          "telemetry_after": {
+            "npu_util_pct": 88.6,
+            "npu_mem_used_mb": 34512.8,
+            "npu_mem_total_mb": 49024.0,
+            "cpu_total_pct": 36.3
+          },
+          "during": {
+            "samples": 48,
+            "npu_util_peak": 95.26,
+            "npu_util_median": 86.7,
+            "npu_mem_peak_mb": 34512.8,
+            "npu_mem_total_mb": 49024.0
+          }
+        }
+      }
+    }
+  ]
+}

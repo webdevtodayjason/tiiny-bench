@@ -1,0 +1,53 @@
+{
+  "label": "smoke",
+  "stamp": "20260816-183551",
+  "model": "Qwen/Qwen3.6-35B-A3B-turbo",
+  "build": "0.1.33",
+  "npu_units": 55,
+  "npu_total": 100,
+  "npu_mem_total_mb": 49024.0,
+  "results": {
+    "prefill": [
+      {
+        "wall_s": 0.762,
+        "prompt_tokens": 72,
+        "out_tokens": 2,
+        "prefill_tok_s": 133.28,
+        "decode_tok_s": 21.6,
+        "prefill_ms": 540.2,
+        "ttft_s": 0.587,
+        "cached_tokens": 0
+      },
+      {
+        "wall_s": 1.065,
+        "prompt_tokens": 332,
+        "out_tokens": 2,
+        "prefill_tok_s": 364.76,
+        "decode_tok_s": 24.67,
+        "prefill_ms": 910.2,
+        "ttft_s": 0.951,
+        "cached_tokens": 0
+      },
+      {
+        "wall_s": 2.439,
+        "prompt_tokens": 1580,
+        "out_tokens": 2,
+        "prefill_tok_s": 665.88,
+        "decode_tok_s": 23.3,
+        "prefill_ms": 2264.7,
+        "ttft_s": 2.308,
+        "cached_tokens": 72
+      },
+      {
+        "wall_s": 7.103,
+        "prompt_tokens": 6260,
+        "out_tokens": 2,
+        "prefill_tok_s": 724.04,
+        "decode_tok_s": 20.95,
+        "prefill_ms": 6822.8,
+        "ttft_s": 6.871,
+        "cached_tokens": 1320
+      }
+    ]
+  }
+}

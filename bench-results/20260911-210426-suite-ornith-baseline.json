@@ -1,0 +1,142 @@
+{
+  "label": "ornith-baseline",
+  "stamp": "20260911-210426",
+  "build": "0.1.29",
+  "host": "192.168.100.94",
+  "suite_version": 2,
+  "models": [
+    {
+      "model": "deepreinforce-ai/Ornith-1.0-35B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 50,
+      "total_size": 18041197148,
+      "elapsed_s": 215.8,
+      "npu_mem_total_mb": 49024.0,
+      "results": {
+        "prefill": [
+          {
+            "wall_s": 0.843,
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 134.53,
+            "decode_tok_s": 53.12,
+            "prefill_ms": 535.2,
+            "ttft_s": 0.554,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 1.158,
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 388.0,
+            "decode_tok_s": 52.86,
+            "prefill_ms": 855.7,
+            "ttft_s": 0.875,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 2.458,
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 710.84,
+            "decode_tok_s": 51.76,
+            "prefill_ms": 2121.4,
+            "ttft_s": 2.141,
+            "cached_tokens": 72
+          },
+          {
+            "wall_s": 6.969,
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 755.55,
+            "decode_tok_s": 49.78,
+            "prefill_ms": 6538.3,
+            "ttft_s": 6.558,
+            "cached_tokens": 1320
+          }
+        ],
+        "sustained": {
+          "run": {
+            "wall_s": 58.731,
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 89.99,
+            "decode_tok_s": 25.91,
+            "prefill_ms": 500.0,
+            "ttft_s": 0.539,
+            "cached_tokens": 0
+          },
+          "telemetry_before": {
+            "npu_util_pct": 0.0,
+            "npu_mem_used_mb": 34512.8,
+            "npu_mem_total_mb": 49024.0,
+            "cpu_total_pct": 32.3
+          },
+          "telemetry_after": {
+            "npu_util_pct": 0.0,
+            "npu_mem_used_mb": 34512.8,
+            "npu_mem_total_mb": 49024.0,
+            "cpu_total_pct": 0.0
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 23.5,
+            "per_stream_tok_s": 26.44,
+            "wall_s": 6.81,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 24.42,
+            "per_stream_tok_s": 26.27,
+            "wall_s": 13.1,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 24.19,
+            "per_stream_tok_s": 26.4,
+            "wall_s": 26.46,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 24.21,
+            "per_stream_tok_s": 26.34,
+            "wall_s": 52.88,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "wall_s": 22.444,
+            "prompt_tokens": 45,
+            "out_tokens": 565,
+            "prefill_tok_s": 94.53,
+            "decode_tok_s": 26.05,
+            "prefill_ms": 476.0,
+            "ttft_s": 0.514,
+            "cached_tokens": 0
+          },
+          "on": {
+            "wall_s": 23.418,
+            "prompt_tokens": 43,
+            "out_tokens": 598,
+            "prefill_tok_s": 10.46,
+            "decode_tok_s": 26.09,
+            "prefill_ms": 191.3,
+            "ttft_s": 0.23,
+            "cached_tokens": 41
+          }
+        }
+      }
+    }
+  ]
+}

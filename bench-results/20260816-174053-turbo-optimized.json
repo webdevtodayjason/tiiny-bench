@@ -1,0 +1,108 @@
+{
+  "label": "turbo-optimized",
+  "stamp": "20260816-174053",
+  "model": "Qwen/Qwen3.6-35B-A3B-turbo",
+  "context": {
+    "tiiny_os": "0.1.33",
+    "npu_used": 55,
+    "npu_total": 100,
+    "running": [
+      "Qwen/Qwen3.6-35B-A3B-turbo"
+    ]
+  },
+  "results": {
+    "short": {
+      "tok_per_s_median": 30.98,
+      "tok_per_s_all": [
+        32.47,
+        30.16,
+        30.98
+      ],
+      "runs": [
+        {
+          "wall_s": 1.91,
+          "out_tokens": 39,
+          "tok_per_s": 32.47,
+          "prompt_per_s": 48.01,
+          "content_chars": 205
+        },
+        {
+          "wall_s": 2.13,
+          "out_tokens": 53,
+          "tok_per_s": 30.16,
+          "prompt_per_s": 14.0,
+          "content_chars": 289
+        },
+        {
+          "wall_s": 1.84,
+          "out_tokens": 46,
+          "tok_per_s": 30.98,
+          "prompt_per_s": 15.16,
+          "content_chars": 251
+        }
+      ]
+    },
+    "medium": {
+      "tok_per_s_median": 32.52,
+      "tok_per_s_all": [
+        32.52,
+        30.56,
+        32.55
+      ],
+      "runs": [
+        {
+          "wall_s": 12.83,
+          "out_tokens": 400,
+          "tok_per_s": 32.52,
+          "prompt_per_s": 75.95,
+          "content_chars": 1668
+        },
+        {
+          "wall_s": 13.53,
+          "out_tokens": 400,
+          "tok_per_s": 30.56,
+          "prompt_per_s": 15.23,
+          "content_chars": 1732
+        },
+        {
+          "wall_s": 12.62,
+          "out_tokens": 400,
+          "tok_per_s": 32.55,
+          "prompt_per_s": 14.95,
+          "content_chars": 1548
+        }
+      ]
+    },
+    "long": {
+      "tok_per_s_median": 31.77,
+      "tok_per_s_all": [
+        31.35,
+        32.53,
+        31.77
+      ],
+      "runs": [
+        {
+          "wall_s": 29.41,
+          "out_tokens": 900,
+          "tok_per_s": 31.35,
+          "prompt_per_s": 98.66,
+          "content_chars": 3331
+        },
+        {
+          "wall_s": 28.05,
+          "out_tokens": 900,
+          "tok_per_s": 32.53,
+          "prompt_per_s": 14.26,
+          "content_chars": 2874
+        },
+        {
+          "wall_s": 28.67,
+          "out_tokens": 900,
+          "tok_per_s": 31.77,
+          "prompt_per_s": 15.82,
+          "content_chars": 3198
+        }
+      ]
+    }
+  }
+}
