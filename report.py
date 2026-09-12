@@ -19,10 +19,21 @@ Design notes, since they were deliberate:
   series, and one desaturated blue as the second series so the comparisons stay
   legible to a colourblind reader. Nothing else gets a hue.
 """
+import base64
 import html
 import json
 import math
+import mimetypes
 import pathlib
+
+
+def data_uri(path: pathlib.Path) -> str:
+    """An asset inlined, or an empty string if it is not there. Keeps the
+    report one file, which is the whole point of it."""
+    if not path.exists():
+        return ""
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 # ---------------------------------------------------------------- palette
 C = {
@@ -444,15 +455,17 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
             "<title>TiinyBench</title>",
             f"<style>{CSS}</style><body><div class=wrap>"]
 
-    logo_t = (outdir.parent / "assets" / "tiiny-logo.svg")
-    badge = (outdir.parent / "assets" / "titanium.png")
+    # Inlined, not linked. The file claims to be self-contained and a report
+    # that breaks when you move it out of its folder is not.
+    logo_t = data_uri(outdir.parent / "assets" / "tiiny-logo.svg")
+    badge = data_uri(outdir.parent / "assets" / "titanium-sm.png")
     brand = '<div class="brandrow">'
-    if badge.exists():
-        brand += '<img class="badge" src="assets/titanium.png" alt="Titanium Computing">'
+    if badge:
+        brand += f'<img class="badge" src="{badge}" alt="Titanium Computing">'
     brand += ('<div class="by">benchmarks by<br><b>Titanium Computing</b></div>')
-    if logo_t.exists():
+    if logo_t:
         brand += ('<div class="by" style="margin-left:auto;text-align:right">measured on'
-                  '<br><img src="assets/tiiny-logo.svg" alt="Tiiny" '
+                  f'<br><img src="{logo_t}" alt="Tiiny" '
                   'style="height:17px;margin-top:4px;display:inline-block"></div>')
     brand += "</div>"
 
@@ -504,8 +517,8 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
         "</div></section>")
 
     foot = ['<footer><span>TiinyBench</span>']
-    if logo_t.exists():
-        foot.append('<span>measured on <img src="assets/tiiny-logo.svg" alt="Tiiny" '
+    if logo_t:
+        foot.append(f'<span>measured on <img src="{logo_t}" alt="Tiiny" '
                     'style="vertical-align:-3px"></span>')
     foot.append('<span>built by Titanium Computing</span>')
     foot.append(f'<span>{html.escape(newest["stamp"])}</span></footer>')
