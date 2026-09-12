@@ -181,13 +181,44 @@ def run_suite(label, models, tests):
         S.bus.publish("state", S.snapshot())
 
 
-def leaderboard():
-    """Best measured numbers per model, across every run on disk.
+# Awards. Every one is derived from a measurement, so they update themselves
+# and nobody has to defend a hand-assigned badge. Each is (key, label, what it
+# says, how to score, whether lower wins).
+AWARDS = [
+    ("fastest",     "Fastest",        "highest sustained decode in its class",
+     "decode_tok_s", False),
+    ("per_unit",    "Best per unit",  "most tokens per second per NPU unit",
+     "per_unit", False),
+    ("feather",     "Featherweight",  "best of the models that leave room for another",
+     "per_unit", False),
+    ("deepreader",  "Deep reader",    "ingests a long prompt fastest",
+     "prefill_peak", False),
+    ("cheapthink",  "Cheap thinker",  "reasoning costs it the least wall time",
+     "reasoning_tax", True),
+    ("painter",     "Fastest brush",  "quickest 512 plate",
+     "s_per_image", True),
+    ("voice",       "Best voice",     "most audio per second of wall clock",
+     "rtf", False),
+]
 
-    Ranked by decode rate, but the column that matters on this box is tok/s per
-    NPU unit: you have 100 units and the device runs one inference at a time,
-    so the real question is never "which is fastest" but "which earns its
-    place in the budget"."""
+# What you would actually load it FOR. Same idea, phrased as a job.
+JOBS = [
+    ("chat",      "a chat app",        "Text Generation",    "decode_tok_s", False),
+    ("vision",    "reading screenshots", "Image-Text-to-Text", "decode_tok_s", False),
+    ("documents", "long documents",    None,                 "prefill_peak", False),
+    ("pictures",  "pictures",          "Text-to-Image",      "s_per_image", True),
+    ("speaking",  "talking out loud",  "Text-to-Speech",     "rtf", False),
+    ("search",    "search and recall", "Text Embedding",     "emb_per_s", False),
+]
+
+
+def leaderboard():
+    """Best measured figures per model, grouped by what kind of model it is.
+
+    One ranked list would be a lie: a speech model's real-time factor and a
+    text model's tokens per second are not the same axis. Each class is scored
+    on the number its users actually care about, and the awards are all derived
+    from measurements so none of them has to be argued about."""
     import report as rep
     best = {}
     for r in rep.load(bench.OUT):
@@ -195,55 +226,126 @@ def leaderboard():
         if not m:
             continue
         res = r.get("results") or {}
-        run = ((res.get("sustained") or {}) or {}).get("run") or {}
-        dec = run.get("decode_tok_s")
-        pf = [x.get("prefill_tok_s") or 0 for x in (res.get("prefill") or [])]
-        cc = res.get("concurrency") or []
-        th = res.get("thinking") or {}
-        tax = None
-        if th.get("on") and th.get("off") and th["off"].get("wall_s"):
-            tax = round(th["on"]["wall_s"] / th["off"]["wall_s"], 2)
-        e = best.setdefault(m, {"model": m, "runs": 0, "decode_tok_s": None,
-                                "prefill_peak": None, "agg_peak": None,
-                                "reasoning_tax": None, "last": ""})
+        e = best.setdefault(m, {"model": m, "runs": 0, "last": "",
+                                "decode_tok_s": None, "prefill_peak": None,
+                                "agg_peak": None, "reasoning_tax": None,
+                                "ttft_s": None, "s_per_image": None,
+                                "rtf": None, "emb_per_s": None, "dim": None})
         e["runs"] += 1
         e["last"] = max(e["last"], r.get("stamp") or "")
-        if dec and (e["decode_tok_s"] is None or dec > e["decode_tok_s"]):
-            e["decode_tok_s"] = dec
-        if pf and (e["prefill_peak"] is None or max(pf) > e["prefill_peak"]):
-            e["prefill_peak"] = max(pf)
-        if cc:
-            a = max(c["aggregate_tok_s"] for c in cc)
-            if e["agg_peak"] is None or a > e["agg_peak"]:
-                e["agg_peak"] = a
-        if tax is not None:
-            e["reasoning_tax"] = tax
 
-    # Fold in what the box says each model costs to keep loaded.
+        run = ((res.get("sustained") or {}) or {}).get("run") or {}
+        if run.get("decode_tok_s"):
+            e["decode_tok_s"] = max(e["decode_tok_s"] or 0, run["decode_tok_s"])
+        pf = [x for x in (res.get("prefill") or []) if x.get("prefill_tok_s")]
+        if pf:
+            e["prefill_peak"] = max(e["prefill_peak"] or 0,
+                                    max(x["prefill_tok_s"] for x in pf))
+            first = min(pf, key=lambda x: x.get("prompt_tokens") or 0)
+            if first.get("ttft_s"):
+                e["ttft_s"] = min(e["ttft_s"] or 9e9, first["ttft_s"])
+        cc = res.get("concurrency") or []
+        if cc:
+            e["agg_peak"] = max(e["agg_peak"] or 0,
+                                max(c["aggregate_tok_s"] for c in cc))
+        th = res.get("thinking") or {}
+        if th.get("on") and th.get("off") and th["off"].get("wall_s"):
+            e["reasoning_tax"] = round(th["on"]["wall_s"] / th["off"]["wall_s"], 2)
+        for key, src in (("s_per_image", "image"), ("rtf", "speech"),
+                         ("emb_per_s", "embed")):
+            blk = res.get(src) or {}
+            if blk.get(key) is not None:
+                cur = e[key]
+                lo = key in bench.LOWER_IS_BETTER
+                e[key] = blk[key] if cur is None else (
+                    min(cur, blk[key]) if lo else max(cur, blk[key]))
+            if src == "embed" and blk.get("dim"):
+                e["dim"] = blk["dim"]
+
     try:
         tok = bench.key()
         cat = {m["id"]: m for m in bench.catalog(tok)}
         live = bench.running(tok)
     except Exception:  # noqa: BLE001
         cat, live = {}, []
+
     rows = []
     for m, e in best.items():
         c = cat.get(m, {})
         e["params"] = c.get("params")
         e["npu"] = c.get("npu_usage")
         e["size_gb"] = round((c.get("total_size") or 0) / 1e9, 1) or None
-        e["type"] = c.get("type")
+        e["type"] = c.get("type") or "unknown"
         e["loaded"] = m in live
         e["per_unit"] = (round(e["decode_tok_s"] / e["npu"], 3)
                          if e["decode_tok_s"] and e["npu"] else None)
+        key, unit, meaning = bench.CLASS_METRIC.get(e["type"], (None, "", ""))
+        e["metric_key"], e["metric_unit"], e["metric_means"] = key, unit, meaning
+        e["score"] = e.get(key) if key else None
+        e["awards"] = []
         rows.append(e)
-    rows.sort(key=lambda r: (-(r["decode_tok_s"] or 0), r["model"]))
-    for i, r in enumerate(rows, 1):
-        r["rank"] = i
-    return {"rows": rows, "npu_total": 100,
+
+    def win(pool, field, lower):
+        vals = [r for r in pool if r.get(field) is not None]
+        if not vals:
+            return None
+        return min(vals, key=lambda r: r[field]) if lower else max(vals, key=lambda r: r[field])
+
+    # Awards, scoped to a class where the metric only exists inside one.
+    by_class = {}
+    for r in rows:
+        by_class.setdefault(r["type"], []).append(r)
+    for key, label, blurb, field, lower in AWARDS:
+        pool = rows
+        if key == "feather":
+            pool = [r for r in rows if (r.get("npu") or 999) <= 32]
+        if field in ("decode_tok_s", "per_unit", "prefill_peak", "reasoning_tax"):
+            # these only mean something between text-ish models
+            pool = [r for r in pool if r["type"] in
+                    ("Text Generation", "Image-Text-to-Text")]
+        w = win(pool, field, lower)
+        if w and not any(a["key"] == key for a in w["awards"]):
+            w["awards"].append({"key": key, "label": label, "why": blurb})
+
+    jobs = []
+    for key, label, cls, field, lower in JOBS:
+        pool = [r for r in rows if cls is None or r["type"] == cls]
+        w = win(pool, field, lower)
+        if w:
+            jobs.append({"key": key, "job": label, "model": w["model"],
+                         "value": w.get(field), "field": field,
+                         "npu": w.get("npu"), "type": w["type"]})
+
+    # Sort inside each class by that class's own metric.
+    for cls, pool in by_class.items():
+        lower = bench.CLASS_METRIC.get(cls, (None,))[0] in bench.LOWER_IS_BETTER
+        pool.sort(key=lambda r: (r["score"] is None,
+                                 (r["score"] or 0) * (1 if lower else -1), r["model"]))
+        for i, r in enumerate(pool, 1):
+            r["rank"] = i
+
+    order = ["Text Generation", "Image-Text-to-Text", "Text-to-Image",
+             "Text-to-Speech", "Text Embedding"]
+    classes = [{"type": c,
+                "metric": bench.CLASS_METRIC.get(c, (None, "", ""))[1],
+                "means": bench.CLASS_METRIC.get(c, (None, "", ""))[2],
+                "lower": bench.CLASS_METRIC.get(c, (None,))[0] in bench.LOWER_IS_BETTER,
+                "rows": by_class[c]}
+               for c in order + [k for k in by_class if k not in order]
+               if c in by_class]
+
+    # Every class on the box, measured or not, so the gaps are visible.
+    coverage = []
+    for c in sorted({(m.get("type") or "unknown") for m in cat.values()}):
+        installed = [m for m in cat.values() if m.get("type") == c]
+        coverage.append({"type": c, "installed": len(installed),
+                         "measured": len(by_class.get(c, [])),
+                         "testable": c in bench.SUITES})
+
+    return {"classes": classes, "jobs": jobs, "coverage": coverage,
+            "npu_total": 100,
             "npu_used": sum((cat.get(m, {}).get("npu_usage") or 0) for m in live),
-            "loaded": live,
-            "catalog": list(cat.values())}
+            "loaded": live, "catalog": list(cat.values())}
 
 
 class Handler(BaseHTTPRequestHandler):

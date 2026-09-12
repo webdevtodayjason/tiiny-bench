@@ -108,6 +108,18 @@ tbody tr:hover td{background:var(--s2)}
   padding:2px 7px;border-radius:3px;border:1px solid var(--line2);color:var(--steel)}
 .pill.live{border-color:#4a7c3f;color:var(--good)}
 .pill.o{border-color:#7a4416;color:var(--orange)}
+.aw{display:inline-block;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  padding:2px 7px;border-radius:3px;border:1px solid #7a4416;color:var(--orange);
+  background:#1d1409;margin-right:5px;white-space:nowrap}
+.clshd{display:flex;align-items:baseline;gap:11px;margin:26px 0 10px;flex-wrap:wrap}
+.clshd h4{font-size:14px;font-weight:600;letter-spacing:-.02em}
+.clshd .mu{font-size:11px;color:var(--dim);letter-spacing:.06em}
+.jobs{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.job{background:var(--s1);border:1px solid var(--line);border-radius:7px;padding:14px 15px}
+.job .j{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--steel)}
+.job .m{font-size:14px;font-weight:600;margin-top:7px;letter-spacing:-.02em;word-break:break-word}
+.job .v{font-size:11.5px;color:var(--orange);margin-top:4px}
+.cov td.no{color:var(--dim)}
 .meter{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;min-width:66px}
 .meter i{display:block;height:100%;background:var(--orange)}
 
@@ -259,9 +271,10 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   </div>
   <div class="grid" id="dstats"></div>
   <div style="margin-top:26px">
-    <h3>Leaderboard</h3>
-    <div class="tw" id="dboard"><div class="empty">no runs yet</div></div>
+    <h3>What to load for the job</h3>
+    <div class="jobs" id="djobs"><div class="empty">run a benchmark and this fills in</div></div>
   </div>
+  <div style="margin-top:8px" id="dboard"></div>
   <div class="grid" style="margin-top:26px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
     <div class="card"><div class="hd">NPU budget <span class="r" id="budgetr"></span></div>
       <div class="bd"><div class="budget" id="dbudget"></div>
@@ -343,7 +356,13 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   <div class="head"><div><h2>Leaderboard</h2>
     <p>Best measured figures per model across every run on disk. Sorted by sustained decode;
        the column that decides things on this box is tok/s per NPU unit.</p></div></div>
-  <div class="tw" id="board"><div class="empty">no runs yet</div></div>
+  <div id="board"><div class="empty">no runs yet</div></div>
+  <div style="margin-top:34px">
+    <h3>Coverage</h3>
+    <p class="note" style="margin:0 0 12px">Nine kinds of model live on this box. These are the
+      ones the suite can measure so far, and the ones it cannot yet.</p>
+    <div class="tw" id="coverage"></div>
+  </div>
 </section>
 
 <!-- ================= CAN I RUN IT ================= -->
@@ -423,7 +442,7 @@ function go(p){
     else bs[k].removeAttribute('aria-current');
   }
   if (location.hash !== '#'+p) location.hash = p;
-  if (p==='board') board(); if (p==='fit') fit(); if (p==='models') models();
+  if (p==='board') board().then(function(){ drawCoverage(); }); if (p==='fit') fit(); if (p==='models') models();
   if (p==='history') history_(); if (p==='dash') dash();
 }
 $('nav').addEventListener('click', function(e){
@@ -455,9 +474,12 @@ function board(){
 /* ---- dashboard ------------------------------------------------------ */
 function dash(){
   if (!S.board) return board().then(dash);
-  var rows=S.board.rows||[];
-  var top=rows[0];
-  var best=rows.filter(function(r){return r.per_unit;}).sort(function(a,b){return b.per_unit-a.per_unit;})[0];
+  var rows=[]; (S.board.classes||[]).forEach(function(c){ rows=rows.concat(c.rows); });
+  var txt=rows.filter(function(r){return r.decode_tok_s;})
+              .sort(function(a,b){return b.decode_tok_s-a.decode_tok_s;});
+  var top=txt[0];
+  var best=rows.filter(function(r){return r.per_unit;})
+               .sort(function(a,b){return b.per_unit-a.per_unit;})[0];
   $('dstats').innerHTML =
     stat('▲', top? top.decode_tok_s.toFixed(1)+'<small>tok/s</small>' : '—',
          'fastest decode', top? sh(top.model):'run one to find out') +
@@ -466,8 +488,14 @@ function dash(){
     stat('▣', String(rows.length), 'models measured',
          (S.cat.length||0)+' installed on the box') +
     stat('↻', String(S.runs||0), 'runs on disk', S.lastStamp||'—');
-  drawBoard($('dboard'), 4); drawBudget();
+  drawBoard($('dboard'), 3); drawJobs(); drawCoverage(); drawBudget();
   j('/api/runs').then(function(d){
+    // The count comes from this same response, not from whatever history_()
+    // happened to have fetched first. It was racing and showing zero.
+    S.runs=(d.runs||[]).length; S.lastStamp=(d.runs||[])[0]&&d.runs[0].stamp;
+    var st=$('dstats').querySelectorAll('.stat');
+    if(st[3]){ st[3].querySelector('.v').textContent=String(S.runs);
+               st[3].querySelector('.n').textContent=S.lastStamp||'—'; }
     var rs=(d.runs||[]).slice(0,5);
     $('drecent').innerHTML = rs.length? rs.map(function(r){
       return '<div class="d" style="padding:10px 15px;border-bottom:1px solid var(--line)">'
@@ -482,28 +510,67 @@ function stat(ic,v,k,n){
     +'<div class="k">'+esc(k)+'</div><div class="n">'+esc(n)+'</div></div>';
 }
 
-function drawBoard(el, limit){
-  el = el || $('board');
-  var rows=(S.board&&S.board.rows)||[];
-  if(!rows.length){ el.innerHTML='<div class="empty">No runs yet. Run one and this fills in.</div>'; return; }
-  var top=rows[0].decode_tok_s||1;
-  var use=limit? rows.slice(0,limit):rows;
-  el.innerHTML='<table><thead><tr><th></th><th>model</th><th class="num">decode</th>'
-    +'<th class="num">prefill peak</th><th class="num">NPU</th><th class="num">per unit</th>'
-    +'<th class="num">runs</th></tr></thead><tbody>'
-    + use.map(function(r){
-      var pct = r.decode_tok_s? (r.decode_tok_s/top*100):0;
+function awards(r){
+  return (r.awards||[]).map(function(a){
+    return '<span class="aw" title="'+esc(a.why)+'">'+esc(a.label)+'</span>';
+  }).join('');
+}
+function classTable(c, limit){
+  var rows = limit ? c.rows.slice(0,limit) : c.rows;
+  var scored = c.rows.filter(function(r){return r.score!=null;});
+  var top = scored.length ? (c.lower ? Math.min.apply(null,scored.map(function(r){return r.score;}))
+                                     : Math.max.apply(null,scored.map(function(r){return r.score;}))) : 1;
+  return '<div class="clshd"><h4>'+esc(c.type)+'</h4>'
+    +'<span class="mu">ranked by '+esc(c.means||c.metric)+'</span></div>'
+    +'<div class="tw"><table><thead><tr><th></th><th>model</th>'
+    +'<th class="num">'+esc(c.metric)+'</th><th class="num">NPU</th>'
+    +'<th class="num">per unit</th><th>best at</th><th class="num">runs</th>'
+    +'</tr></thead><tbody>'
+    + rows.map(function(r){
+      var pct = r.score!=null && top ? (c.lower ? top/r.score*100 : r.score/top*100) : 0;
       return '<tr><td class="rank">'+String(r.rank).padStart(2,'0')+'</td>'
       +'<td><div class="mname">'+esc(sh(r.model))+' '
         +(r.loaded?'<span class="pill live">loaded</span>':'')+'</div>'
       +'<div class="msub">'+esc(r.params||'')+(r.size_gb?' · '+r.size_gb+' GB':'')+'</div></td>'
       +'<td class="num"><div style="display:flex;align-items:center;gap:9px;justify-content:flex-end">'
-        +'<span class="meter"><i style="width:'+pct.toFixed(0)+'%"></i></span>'
-        +'<b>'+(r.decode_tok_s?r.decode_tok_s.toFixed(1):'—')+'</b></div></td>'
-      +'<td class="num">'+(r.prefill_peak?Math.round(r.prefill_peak).toLocaleString():'—')+'</td>'
+        +'<span class="meter"><i style="width:'+Math.max(0,Math.min(100,pct)).toFixed(0)+'%"></i></span>'
+        +'<b>'+(r.score!=null?r.score:'—')+'</b></div></td>'
       +'<td class="num">'+(r.npu||'—')+'</td>'
-      +'<td class="num" style="color:var(--hot)">'+(r.per_unit?r.per_unit.toFixed(2):'—')+'</td>'
+      +'<td class="num" style="color:var(--hot)">'+(r.per_unit!=null?r.per_unit.toFixed(2):'—')+'</td>'
+      +'<td>'+(awards(r)||'<span style="color:var(--dim)">—</span>')+'</td>'
       +'<td class="num" style="color:var(--dim)">'+r.runs+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+}
+function drawBoard(el, limit){
+  el = el || $('board');
+  var cs = (S.board&&S.board.classes)||[];
+  if(!cs.length){ el.innerHTML='<div class="empty">No runs yet. Run one and this fills in.</div>'; return; }
+  var use = limit ? cs.slice(0,2) : cs;
+  el.innerHTML = use.map(function(c){ return classTable(c, limit); }).join('');
+}
+function drawJobs(){
+  var jb=(S.board&&S.board.jobs)||[];
+  if(!jb.length){ $('djobs').innerHTML='<div class="empty">run a benchmark and this fills in</div>'; return; }
+  var U={decode_tok_s:'tok/s',prefill_peak:'tok/s prefill',s_per_image:'s per plate',
+         rtf:'x real time',emb_per_s:'emb/s'};
+  $('djobs').innerHTML=jb.map(function(j){
+    return '<div class="job"><div class="j">best for '+esc(j.job)+'</div>'
+      +'<div class="m">'+esc(sh(j.model))+'</div>'
+      +'<div class="v">'+esc(String(j.value))+' '+esc(U[j.field]||'')
+      +(j.npu?' · '+j.npu+' units':'')+'</div></div>';
+  }).join('');
+}
+function drawCoverage(){
+  var cv=(S.board&&S.board.coverage)||[];
+  if(!cv.length) return;
+  $('coverage').innerHTML='<table class="cov"><thead><tr><th>class</th>'
+    +'<th class="num">installed</th><th class="num">measured</th><th>test</th>'
+    +'</tr></thead><tbody>'+cv.map(function(c){
+      return '<tr><td>'+esc(c.type)+'</td><td class="num">'+c.installed+'</td>'
+      +'<td class="num" style="color:'+(c.measured?'var(--hot)':'var(--dim)')+'">'+c.measured+'</td>'
+      +'<td class="'+(c.testable?'':'no')+'">'+(c.testable
+        ? '<span class="pill o">has a test</span>'
+        : 'no test yet')+'</td></tr>';
     }).join('')+'</tbody></table>';
 }
 

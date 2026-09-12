@@ -61,6 +61,19 @@ def emit(kind, **data):
             pass
 
 
+IMAGE_PROMPTS = [
+    "a lighthouse on a rocky shore at dusk, painterly",
+    "a bowl of oranges on a wooden table, soft window light",
+    "a fox asleep under a fern, children's book illustration",
+]
+SPEECH_TEXTS = [
+    "The quick brown fox jumps over the lazy dog.",
+    "Engineers measured the throughput carefully and recorded every result, "
+    "then compared it against the figure printed on the box.",
+    "It was the best of times, it was the worst of times, it was the age of "
+    "wisdom, it was the age of foolishness, it was the epoch of belief.",
+]
+
 # Deterministic filler so prompt lengths are repeatable across runs.
 FILLER = ("The quick brown fox jumps over the lazy dog near the riverbank at dawn. "
           "Engineers measured the throughput carefully and recorded every result. ")
@@ -68,7 +81,10 @@ FILLER = ("The quick brown fox jumps over the lazy dog near the riverbank at daw
 # The suite talks to chat completions, so these are the model types it can
 # actually exercise. Everything else on the box is listed but skipped, with the
 # reason shown, rather than silently dropped.
-CHAT_TYPES = {"Text Generation", "Image-Text-to-Text"}
+# Every class the suite has a test for. Anything else is listed and skipped
+# with the reason shown, rather than silently dropped.
+CHAT_TYPES = {"Text Generation", "Image-Text-to-Text", "Text-to-Image",
+              "Text-to-Speech", "Text Embedding"}
 
 
 def key():
@@ -100,6 +116,20 @@ def api(url, tok, body=None, timeout=900, method=None):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.load(r)
+    except Exception as e:
+        return {"_error": str(e)[:140]}
+
+
+def api_raw(url, tok, body=None, timeout=300):
+    """Same as api() but for endpoints that hand back a file, not JSON."""
+    req = urllib.request.Request(
+        url, method="POST" if body is not None else "GET",
+        data=json.dumps(body).encode() if body else None,
+        headers={"Authorization": f"Bearer {tok}",
+                 **({"Content-Type": "application/json"} if body else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read()
     except Exception as e:
         return {"_error": str(e)[:140]}
 
@@ -309,8 +339,127 @@ def t_thinking(tok, model):
     return out
 
 
+def t_image(tok, model):
+    """Seconds per 512x512 plate. The only figure an image model is judged by
+    on this box, because 512 is the only size the firmware will render."""
+    say("\n  IMAGE GENERATION  (512x512, 8 steps)")
+    rows = []
+    for i, prompt in enumerate(IMAGE_PROMPTS):
+        t0 = time.time()
+        raw = api_raw(f"http://{HOST}:{GW}/v1/image/generate", tok,
+                      {"model": model, "prompt": prompt, "negative_prompt": "",
+                       "width": 512, "height": 512, "seed": 1000 + i, "steps": 8},
+                      timeout=300)
+        wall = time.time() - t0
+        if not isinstance(raw, (bytes, bytearray)):
+            say(f"    image {i+1} FAILED {str(raw)[:60]}"); continue
+        rows.append({"wall_s": round(wall, 2), "bytes": len(raw), "seed": 1000 + i})
+        say(f"    image {i+1}  {wall:6.2f}s  {len(raw)//1024:>5} KB")
+    if not rows:
+        return None
+    med = statistics.median(r["wall_s"] for r in rows)
+    say(f"    median {med:.2f}s per plate")
+    return {"runs": rows, "s_per_image": round(med, 2)}
+
+
+def _wav_seconds(raw):
+    """Duration out of a RIFF header, so the real-time factor is measured
+    rather than guessed from a character count."""
+    try:
+        if raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+            return None
+        i, rate, ch, bits = 12, None, None, None
+        while i + 8 <= len(raw):
+            cid = raw[i:i+4]
+            size = int.from_bytes(raw[i+4:i+8], "little")
+            body = raw[i+8:i+8+size]
+            if cid == b"fmt ":
+                ch = int.from_bytes(body[2:4], "little")
+                rate = int.from_bytes(body[4:8], "little")
+                bits = int.from_bytes(body[14:16], "little")
+            elif cid == b"data" and rate and ch and bits:
+                return size / (rate * ch * max(1, bits // 8))
+            i += 8 + size + (size & 1)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def t_speech(tok, model):
+    """Real-time factor: seconds of audio produced per second of wall clock.
+    Above 1.0 means it can talk faster than a person listens, which is the only
+    threshold that matters for anything conversational."""
+    say("\n  SPEECH  (real-time factor)")
+    rows = []
+    for i, text in enumerate(SPEECH_TEXTS):
+        t0 = time.time()
+        raw = api_raw(f"http://{HOST}:{GW}/v1/audio/speech", tok,
+                      {"model": model, "input": text, "response_format": "wav"},
+                      timeout=300)
+        wall = time.time() - t0
+        if not isinstance(raw, (bytes, bytearray)):
+            say(f"    clip {i+1} FAILED {str(raw)[:60]}"); continue
+        secs = _wav_seconds(raw)
+        rtf = round(secs / wall, 2) if secs and wall else None
+        rows.append({"chars": len(text), "wall_s": round(wall, 2),
+                     "audio_s": round(secs, 2) if secs else None, "rtf": rtf})
+        say(f"    clip {i+1}  {len(text):>4} chars  {wall:6.2f}s  "
+            + (f"{secs:5.1f}s audio  {rtf}x real time" if secs else "(duration unknown)"))
+    good = [r["rtf"] for r in rows if r.get("rtf")]
+    if good:
+        say(f"    median {statistics.median(good):.2f}x real time")
+    if not rows:
+        return None
+    return {"runs": rows,
+            "rtf": round(statistics.median(good), 2) if good else None}
+
+
+def t_embed(tok, model):
+    """Embeddings per second, at one, eight and thirty-two at a time."""
+    say("\n  EMBEDDINGS  (throughput)")
+    rows = []
+    for n in (1, 8, 32):
+        batch = [FILLER[:180] + f" item {i}" for i in range(n)]
+        t0 = time.time()
+        v = api(f"http://{HOST}:{GW}/v1/embeddings", tok,
+                {"model": model, "input": batch}, timeout=180)
+        wall = time.time() - t0
+        if "_error" in v:
+            say(f"    batch {n:>3} FAILED {v['_error'][:55]}"); continue
+        data = v.get("data") or []
+        dim = len((data[0] or {}).get("embedding") or []) if data else 0
+        rate = round(len(data) / wall, 1) if wall else 0
+        rows.append({"batch": n, "wall_s": round(wall, 3), "returned": len(data),
+                     "dim": dim, "per_s": rate})
+        say(f"    batch {n:>3}  {wall:6.3f}s  {rate:8.1f} emb/s  dim {dim}")
+    if not rows:
+        return None
+    return {"runs": rows, "emb_per_s": max(r["per_s"] for r in rows),
+            "dim": rows[0]["dim"]}
+
+
 TESTS = {"prefill": t_prefill, "sustained": t_sustained,
-         "concurrency": t_concurrency, "thinking": t_thinking}
+         "concurrency": t_concurrency, "thinking": t_thinking,
+         "image": t_image, "speech": t_speech, "embed": t_embed}
+
+# Which tests mean anything for which kind of model.
+SUITES = {
+    "Text Generation":    ["prefill", "sustained", "concurrency", "thinking"],
+    "Image-Text-to-Text": ["prefill", "sustained", "concurrency", "thinking"],
+    "Text-to-Image":      ["image"],
+    "Text-to-Speech":     ["speech"],
+    "Text Embedding":     ["embed"],
+}
+
+# The headline figure per class: (key in results, unit, what it means).
+CLASS_METRIC = {
+    "Text Generation":    ("decode_tok_s", "tok/s", "sustained decode"),
+    "Image-Text-to-Text": ("decode_tok_s", "tok/s", "sustained decode"),
+    "Text-to-Image":      ("s_per_image", "s/img", "per 512 plate"),
+    "Text-to-Speech":     ("rtf", "x", "faster than real time"),
+    "Text Embedding":     ("emb_per_s", "emb/s", "embeddings per second"),
+}
+LOWER_IS_BETTER = {"s_per_image"}
 
 
 def suite(tok, model, want, meta):
@@ -319,8 +468,18 @@ def suite(tok, model, want, meta):
     say(f"\n  ---- {model} " + "-" * max(0, 56 - len(model)))
     results = {}
     t0 = time.time()
-    for name in want:
+    # A leaderboard that ranks a speech model by tokens per second is measuring
+    # nothing. Each class only runs the tests that mean something for it.
+    allowed = SUITES.get(meta.get("type"), [])
+    todo = [n for n in want if n in allowed] or allowed
+    skipped = [n for n in want if n not in allowed]
+    if skipped:
+        say(f"    skipping {', '.join(skipped)}: not meaningful for a "
+            f"{meta.get('type')} model")
+    for i, name in enumerate(todo):
+        emit("test", model=model, test=name, index=i, total=len(todo))
         results[name] = TESTS[name](tok, model)
+        emit("test_done", model=model, test=name, index=i, total=len(todo))
     return {
         "model": model,
         "params": meta.get("params"),

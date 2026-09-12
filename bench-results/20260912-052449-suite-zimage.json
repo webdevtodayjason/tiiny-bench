@@ -1,0 +1,40 @@
+{
+  "label": "zimage",
+  "stamp": "20260912-052449",
+  "build": "0.1.29",
+  "host": "192.168.100.94",
+  "suite_version": 2,
+  "models": [
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "params": "10B",
+      "type": "Text-to-Image",
+      "npu_usage": 32,
+      "total_size": 10225914531,
+      "elapsed_s": 23.8,
+      "npu_mem_total_mb": 49024.0,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 7.93,
+              "bytes": 453122,
+              "seed": 1000
+            },
+            {
+              "wall_s": 7.91,
+              "bytes": 460038,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.0,
+              "bytes": 700697,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 7.93
+        }
+      }
+    }
+  ]
+}
