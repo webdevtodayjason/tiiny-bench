@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TiinyBench</title>
+<link rel="icon" href="/assets/tiinybench-favicon.svg">
+<style>
+/* ---------------------------------------------------------------------
+   Palette straight off the TiinyBench mark: #EF7D22 on #101214 with a
+   cream #F5F3EE. One monospace family throughout, because every figure in
+   this app is a measurement and a measurement wants a column to line up in.
+   Hierarchy is size and weight, never a second typeface.
+   --------------------------------------------------------------------- */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ground:#101214; --s1:#16191c; --s2:#1d2126; --s3:#242930;
+  --line:#2a2f36; --line2:#363c45;
+  --steel:#8b929c; --dim:#616873; --ink:#F5F3EE;
+  --orange:#EF7D22; --orange-dim:#a8551340; --hot:#ffb968;
+  --cool:#6fb3c9; --good:#7fb069; --bad:#d1564a;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,"DejaVu Sans Mono",Consolas,monospace;
+  --nav:236px;
+}
+html{background:var(--ground);color-scheme:dark}
+body{
+  font-family:var(--mono);color:var(--ink);font-size:14px;line-height:1.55;
+  letter-spacing:-.01em;-webkit-font-smoothing:antialiased;background:var(--ground);
+  display:grid;grid-template-columns:var(--nav) minmax(0,1fr);min-height:100vh;
+}
+a{color:inherit}
+
+/* ---- sidebar -------------------------------------------------------- */
+nav{
+  background:var(--s1);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+}
+.brand{padding:20px 18px 18px;border-bottom:1px solid var(--line);display:flex;
+  align-items:center;gap:11px}
+.brand img{width:34px;height:34px;border-radius:8px;display:block}
+.brand .n{font-size:15px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
+.brand .n em{font-style:normal;color:var(--orange)}
+.brand .s{font-size:9.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--dim);
+  margin-top:3px}
+.navlist{padding:10px 10px;flex:1;overflow-y:auto}
+.navlist button{
+  width:100%;display:flex;align-items:center;gap:11px;background:none;border:0;
+  color:var(--steel);font:inherit;font-size:13px;padding:9px 11px;border-radius:5px;
+  cursor:pointer;text-align:left;transition:background .12s,color .12s;
+}
+.navlist button:hover{background:var(--s2);color:var(--ink)}
+.navlist button[aria-current="page"]{background:var(--s3);color:var(--ink);
+  box-shadow:inset 2px 0 0 var(--orange)}
+.navlist .ico{width:15px;text-align:center;opacity:.75;flex:none;font-size:13px}
+.navlist .sect{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);padding:16px 11px 6px}
+.navfoot{padding:13px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+.navfoot .row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.navfoot b{color:var(--steel);font-weight:400}
+.navfoot img{height:12px;opacity:.55;display:block}
+
+/* ---- main ----------------------------------------------------------- */
+main{padding:0 clamp(18px,3vw,40px) 80px;max-width:1500px;overflow-x:hidden}
+.page{display:none}
+.page.on{display:block;animation:in .28s cubic-bezier(.22,.61,.36,1) both}
+@keyframes in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.head{padding:30px 0 22px;display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);margin-bottom:26px}
+h2{font-size:clamp(21px,2.8vw,30px);font-weight:600;letter-spacing:-.04em;line-height:1.05}
+.head p{color:var(--steel);font-size:13px;margin-top:5px;max-width:64ch;text-wrap:pretty}
+.head .right{margin-left:auto;display:flex;gap:9px;align-items:center}
+
+h3{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--steel);
+  margin-bottom:12px}
+
+/* ---- cards & stats -------------------------------------------------- */
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(188px,1fr))}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:7px}
+.card .hd{padding:12px 15px;border-bottom:1px solid var(--line);font-size:11px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--steel);display:flex;
+  align-items:center;gap:9px;background:var(--s2);border-radius:7px 7px 0 0}
+.card .hd .r{margin-left:auto;color:var(--orange);letter-spacing:.04em}
+.card .bd{padding:15px}
+.stat{background:var(--s1);border:1px solid var(--line);border-radius:7px;padding:16px 17px}
+.stat .ic{width:30px;height:30px;border-radius:7px;background:var(--s3);display:grid;
+  place-items:center;margin-bottom:13px;font-size:14px}
+.stat .v{font-size:clamp(25px,3.2vw,33px);font-weight:600;letter-spacing:-.045em;
+  line-height:1;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:.42em;color:var(--dim);font-weight:400;letter-spacing:0;
+  margin-left:.3em}
+.stat .k{margin-top:9px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--steel)}
+.stat .n{margin-top:4px;font-size:11.5px;color:var(--dim)}
+
+/* ---- tables --------------------------------------------------------- */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:7px;background:var(--s1)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:700px}
+th{text-align:left;font-weight:400;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--steel);padding:11px 14px;background:var(--s2);border-bottom:1px solid var(--line);
+  white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--s2)}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rank{color:var(--orange);font-weight:600;width:34px}
+.mname{font-weight:500}
+.msub{color:var(--dim);font-size:11px;margin-top:2px}
+.pill{display:inline-block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 7px;border-radius:3px;border:1px solid var(--line2);color:var(--steel)}
+.pill.live{border-color:#4a7c3f;color:var(--good)}
+.pill.o{border-color:#7a4416;color:var(--orange)}
+.meter{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;min-width:66px}
+.meter i{display:block;height:100%;background:var(--orange)}
+
+/* ---- buttons -------------------------------------------------------- */
+button.go{background:var(--orange);border:0;color:#160d05;font:inherit;font-weight:600;
+  font-size:13px;padding:10px 20px;border-radius:5px;cursor:pointer;letter-spacing:.02em;
+  transition:filter .13s,transform .08s}
+button.go:hover{filter:brightness(1.1)}
+button.go:active{transform:translateY(1px)}
+button.go[disabled]{opacity:.35;cursor:not-allowed;filter:none;transform:none}
+button.ghost{background:var(--s2);border:1px solid var(--line2);color:var(--steel);font:inherit;
+  font-size:12.5px;padding:9px 15px;border-radius:5px;cursor:pointer;transition:all .13s}
+button.ghost:hover{border-color:var(--steel);color:var(--ink)}
+button.danger{border-color:#6b2f28;color:var(--bad)}
+
+/* ---- wizard --------------------------------------------------------- */
+.steps{display:flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--line);
+  border-radius:7px;padding:13px 16px;margin-bottom:20px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12.5px}
+.step .n{width:21px;height:21px;border-radius:50%;border:1px solid var(--line2);display:grid;
+  place-items:center;font-size:11px;flex:none}
+.step.on{color:var(--ink)}
+.step.on .n{background:var(--orange);border-color:var(--orange);color:#160d05;font-weight:600}
+.step.done{color:var(--steel)}
+.step.done .n{border-color:var(--orange);color:var(--orange)}
+.steps .sep{flex:1;height:1px;background:var(--line);min-width:14px;max-width:44px}
+
+.mgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(275px,1fr))}
+.mcard{background:var(--s1);border:1px solid var(--line);border-radius:6px;padding:12px 14px;
+  display:flex;gap:11px;align-items:flex-start;cursor:pointer;transition:all .13s}
+.mcard:hover{border-color:var(--line2)}
+.mcard.sel{border-color:var(--orange);background:#1a1410}
+.mcard.no{opacity:.38;cursor:not-allowed}
+.mcard input{accent-color:var(--orange);width:15px;height:15px;margin-top:2px;flex:none;
+  cursor:pointer}
+.mcard .t{font-size:12.5px;line-height:1.35;word-break:break-word}
+.mcard .m{font-size:11px;color:var(--dim);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap}
+.mcard .m b{color:var(--steel);font-weight:400}
+
+.modes{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.mode{background:var(--s1);border:1px solid var(--line);border-radius:7px;padding:15px;
+  cursor:pointer;transition:all .13s}
+.mode:hover{border-color:var(--line2)}
+.mode.sel{border-color:var(--orange);background:#1a1410}
+.mode .t{font-size:14px;font-weight:600;margin-bottom:3px}
+.mode .s{font-size:12px;color:var(--orange)}
+.mode .d{font-size:11.5px;color:var(--dim);margin-top:7px;text-wrap:pretty}
+
+.tchips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--s2);color:var(--steel);border-radius:5px;
+  padding:8px 13px;font:inherit;font-size:12px;cursor:pointer;transition:all .13s}
+.chip[aria-pressed="true"]{border-color:var(--orange);color:var(--hot);background:#1e1610}
+.chip:hover{border-color:var(--steel)}
+
+.bar{position:sticky;bottom:0;background:linear-gradient(transparent,var(--ground) 22%);
+  padding:22px 0 0;margin-top:24px}
+.barin{background:var(--s2);border:1px solid var(--line2);border-radius:7px;padding:13px 17px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.barin .info{font-size:12.5px;color:var(--steel)}
+.barin .info b{color:var(--ink);font-weight:500}
+.barin .sp{flex:1}
+
+.warn{background:#1d1509;border:1px solid #5c3d12;border-radius:7px;padding:13px 16px;
+  margin-bottom:18px;font-size:12.5px;color:#e8c89a;text-wrap:pretty}
+.warn b{color:var(--hot)}
+.warn .ti{font-weight:600;color:var(--hot);display:block;margin-bottom:3px}
+
+/* ---- run view ------------------------------------------------------- */
+.runhead{background:var(--s1);border:1px solid var(--line);border-radius:7px;padding:15px 17px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:2px}
+.runhead .ic{width:34px;height:34px;border-radius:8px;background:#2a1a0c;display:grid;
+  place-items:center;color:var(--orange);flex:none}
+.runhead .t{font-size:15px;font-weight:600}
+.runhead .s{font-size:12px;color:var(--dim);margin-top:2px;font-variant-numeric:tabular-nums}
+.runhead .acts{margin-left:auto;display:flex;gap:8px}
+.prog{height:3px;background:var(--line);border-radius:2px;overflow:hidden;margin:12px 0 18px}
+.prog i{display:block;height:100%;background:var(--orange);width:0;
+  transition:width .5s cubic-bezier(.22,.61,.36,1)}
+.split{display:grid;gap:14px;grid-template-columns:minmax(0,300px) minmax(0,1fr)}
+@media (max-width:960px){.split{grid-template-columns:1fr}}
+#log{font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;padding:14px 16px;
+  height:min(62vh,640px);overflow-y:auto;color:var(--steel);font-variant-numeric:tabular-nums}
+#log .head{color:var(--cool);letter-spacing:.05em}
+#log .hi{color:var(--ink)}
+.donelist{max-height:min(62vh,640px);overflow-y:auto}
+.donelist .d{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px}
+.donelist .d:last-child{border-bottom:0}
+.donelist .d .n{color:var(--ink)}
+.donelist .d .s{color:var(--dim);font-size:11px;margin-top:2px}
+
+/* ---- budget --------------------------------------------------------- */
+.budget{display:flex;height:38px;border-radius:6px;overflow:hidden;border:1px solid var(--line);
+  background:var(--s2);margin-bottom:12px}
+.budget .seg{display:grid;place-items:center;font-size:11px;color:#160d05;font-weight:600;
+  overflow:hidden;white-space:nowrap;transition:flex .4s cubic-bezier(.22,.61,.36,1)}
+.budget .free{background:var(--s3);color:var(--dim);font-weight:400}
+.fits{color:var(--good)} .nofit{color:var(--bad)}
+
+.empty{color:var(--dim);text-align:center;padding:34px 16px;font-size:12.5px}
+.err{color:var(--bad);padding:13px 16px;font-size:12.5px}
+input.txt{background:var(--ground);border:1px solid var(--line2);color:var(--ink);font:inherit;
+  font-size:13px;padding:9px 12px;border-radius:5px}
+input.txt:focus{outline:none;border-color:var(--orange)}
+label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--steel)}
+.note{color:var(--dim);font-size:11.5px;margin-top:9px;text-wrap:pretty}
+@media (max-width:820px){
+  body{grid-template-columns:1fr}
+  nav{position:relative;height:auto}
+  .navlist{display:flex;overflow-x:auto;padding:8px}
+  .navlist .sect{display:none}
+  .navlist button{white-space:nowrap}
+}
+</style>
+
+<nav>
+  <div class="brand">
+    <img src="/assets/tiinybench-favicon.svg" alt="">
+    <div><div class="n">Tiiny<em>Bench</em></div><div class="s">Benchmark suite</div></div>
+  </div>
+  <div class="navlist" id="nav">
+    <div class="sect">Measure</div>
+    <button data-p="dash" aria-current="page"><span class="ico">▦</span>Dashboard</button>
+    <button data-p="run"><span class="ico">▶</span>Run Benchmark</button>
+    <button data-p="board"><span class="ico">▤</span>Leaderboard</button>
+    <div class="sect">Plan</div>
+    <button data-p="fit"><span class="ico">◈</span>Can I Run It?</button>
+    <button data-p="models"><span class="ico">▣</span>Models</button>
+    <div class="sect">Records</div>
+    <button data-p="history"><span class="ico">↻</span>History</button>
+    <button data-p="report"><span class="ico">◲</span>Report</button>
+    <button data-p="method"><span class="ico">◉</span>Method</button>
+  </div>
+  <div class="navfoot">
+    <div class="row"><span>device</span><b id="host">…</b></div>
+    <div class="row"><span>measured on</span><img src="/assets/tiiny-logo.svg" alt="Tiiny"></div>
+  </div>
+</nav>
+
+<main>
+<!-- ================= DASHBOARD ================= -->
+<section class="page on" id="p-dash">
+  <div class="head">
+    <div>
+      <h2>Which model should you load?</h2>
+      <p>You own this box, so the question is never what a model costs to call. It is what it
+         costs to keep resident, out of the hundred NPU units you have.</p>
+    </div>
+    <div class="right"><button class="go" data-goto="run">New run</button></div>
+  </div>
+  <div class="grid" id="dstats"></div>
+  <div style="margin-top:26px">
+    <h3>Leaderboard</h3>
+    <div class="tw" id="dboard"><div class="empty">no runs yet</div></div>
+  </div>
+  <div class="grid" style="margin-top:26px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+    <div class="card"><div class="hd">NPU budget <span class="r" id="budgetr"></span></div>
+      <div class="bd"><div class="budget" id="dbudget"></div>
+      <div class="note" id="dbudgetn"></div></div></div>
+    <div class="card"><div class="hd">Recent runs</div><div id="drecent"></div></div>
+  </div>
+</section>
+
+<!-- ================= RUN ================= -->
+<section class="page" id="p-run">
+  <div class="head"><div><h2>Run Benchmark</h2>
+    <p>Pick what to measure and what to measure it on.</p></div>
+    <div class="right" id="runcount"></div></div>
+
+  <div class="steps" id="steps">
+    <div class="step on" data-s="1"><span class="n">1</span>Select models</div>
+    <span class="sep"></span>
+    <div class="step" data-s="2"><span class="n">2</span>Choose tests</div>
+    <span class="sep"></span>
+    <div class="step" data-s="3"><span class="n">3</span>Review &amp; run</div>
+  </div>
+
+  <div id="w1">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <input class="txt" id="msearch" placeholder="Search models…" style="flex:1;min-width:160px">
+      <button class="ghost" id="selloaded">Select loaded</button>
+      <button class="ghost" id="selall">Select all measurable</button>
+      <button class="ghost" id="selnone">Clear</button>
+    </div>
+    <div class="mgrid" id="mgrid"><div class="empty">reading the box…</div></div>
+  </div>
+
+  <div id="w2" hidden>
+    <div class="modes" id="modes"></div>
+    <div class="card" style="margin-top:16px"><div class="hd">Tests</div>
+      <div class="bd"><div class="tchips" id="tests"></div>
+      <p class="note">Each test is a real measurement, not a score. Nothing here judges output
+        quality: a fast wrong answer is still wrong.</p></div></div>
+  </div>
+
+  <div id="w3" hidden>
+    <div class="warn" id="impact"></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))" id="review"></div>
+    <div class="card" style="margin-top:16px"><div class="hd">Label this run</div>
+      <div class="bd" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input class="txt" id="label" value="run" maxlength="48" style="flex:1;min-width:150px">
+        <span class="note" style="margin:0">Shows up in the report and the history.</span>
+      </div></div>
+  </div>
+
+  <div class="bar"><div class="barin">
+    <span class="info" id="wizinfo"></span><span class="sp"></span>
+    <button class="ghost" id="back" hidden>Back</button>
+    <button class="go" id="next">Continue</button>
+  </div></div>
+</section>
+
+<!-- ================= LIVE ================= -->
+<section class="page" id="p-live">
+  <div class="head"><div><h2>Running</h2><p id="liveof"></p></div></div>
+  <div class="runhead">
+    <div class="ic">⚡</div>
+    <div><div class="t" id="lphase">starting</div><div class="s" id="lsub"></div></div>
+    <div class="acts">
+      <button class="ghost danger" id="stop">Stop</button>
+      <button class="ghost" id="viewreport" hidden>Open report</button>
+    </div>
+  </div>
+  <div class="prog"><i id="prog"></i></div>
+  <div class="split">
+    <div class="card"><div class="hd">Finished</div>
+      <div class="donelist" id="done"><div class="empty">nothing yet</div></div></div>
+    <div class="card"><div class="hd">Live output</div><div id="log"></div></div>
+  </div>
+</section>
+
+<!-- ================= LEADERBOARD ================= -->
+<section class="page" id="p-board">
+  <div class="head"><div><h2>Leaderboard</h2>
+    <p>Best measured figures per model across every run on disk. Sorted by sustained decode;
+       the column that decides things on this box is tok/s per NPU unit.</p></div></div>
+  <div class="tw" id="board"><div class="empty">no runs yet</div></div>
+</section>
+
+<!-- ================= CAN I RUN IT ================= -->
+<section class="page" id="p-fit">
+  <div class="head"><div><h2>Can I run it?</h2>
+    <p>The box has a hundred NPU units. Tick what you want resident at the same time and see
+       whether it fits before you find out the hard way.</p></div>
+    <div class="right"><button class="ghost" id="fitreset">Reset to what is loaded</button></div></div>
+  <div class="card"><div class="hd">Budget <span class="r" id="fitr"></span></div>
+    <div class="bd"><div class="budget" id="fitbudget"></div>
+      <div id="fitverdict" style="font-size:13px"></div></div></div>
+  <div class="mgrid" id="fitgrid" style="margin-top:16px"></div>
+</section>
+
+<!-- ================= MODELS ================= -->
+<section class="page" id="p-models">
+  <div class="head"><div><h2>Models on this box</h2>
+    <p>Read off the device itself. There is no model list kept in this repo, because it would
+       be wrong within a week.</p></div></div>
+  <div class="tw" id="catalog"><div class="empty">reading the box…</div></div>
+</section>
+
+<!-- ================= HISTORY ================= -->
+<section class="page" id="p-history">
+  <div class="head"><div><h2>History</h2>
+    <p>Every result file, newest first. These are plain JSON on disk.</p></div></div>
+  <div class="tw" id="history"><div class="empty">nothing yet</div></div>
+</section>
+
+<!-- ================= REPORT ================= -->
+<section class="page" id="p-report">
+  <div class="head"><div><h2>Report</h2>
+    <p>One self-contained HTML file built from every run. No CDN, no webfont, no JavaScript
+       needed to read it. Works offline and you can email it.</p></div>
+    <div class="right"><button class="ghost" id="rebuild">Rebuild</button>
+      <button class="go" id="openreport">Open in a tab</button></div></div>
+  <div class="card"><iframe id="rframe" src="/report" style="width:100%;height:76vh;border:0;
+    border-radius:7px;background:#0b0c0e" title="Benchmark report"></iframe></div>
+</section>
+
+<!-- ================= METHOD ================= -->
+<section class="page" id="p-method">
+  <div class="head"><div><h2>How it is measured</h2>
+    <p>So you can decide whether to believe any of it.</p></div></div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))" id="method"></div>
+</section>
+</main>
+
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var CHAT = {"Text Generation":1,"Image-Text-to-Text":1};
+var TESTS = [["prefill","prefill scaling","how a long prompt scales"],
+             ["sustained","sustained generation","1500 tokens unbroken"],
+             ["concurrency","concurrency","1, 2, 4 and 8 at once"],
+             ["thinking","reasoning cost","thinking on vs off"]];
+var MODES = [
+  ["quick","Quick","sustained","One long generation. About a minute."],
+  ["speed","Speed","prefill,sustained","Prefill and decode. No concurrency."],
+  ["full","Full suite","prefill,sustained,concurrency,thinking","Everything. The honest one."]
+];
+var S = {cat:[], live:[], picked:new Set(), tests:new Set(["prefill","sustained","concurrency","thinking"]),
+         mode:"full", step:1, running:false, board:null, fit:new Set()};
+
+function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+function sh(m){ return (m||'').split('/').pop(); }
+function j(u,o){ return fetch(u,o).then(function(r){ return r.json(); }); }
+
+/* ---- routing -------------------------------------------------------- */
+function go(p){
+  var pages = document.querySelectorAll('.page');
+  for (var i=0;i<pages.length;i++) pages[i].classList.toggle('on', pages[i].id==='p-'+p);
+  var bs = $('nav').querySelectorAll('button');
+  for (var k=0;k<bs.length;k++){
+    if (bs[k].getAttribute('data-p')===p) bs[k].setAttribute('aria-current','page');
+    else bs[k].removeAttribute('aria-current');
+  }
+  if (location.hash !== '#'+p) location.hash = p;
+  if (p==='board') board(); if (p==='fit') fit(); if (p==='models') models();
+  if (p==='history') history_(); if (p==='dash') dash();
+}
+$('nav').addEventListener('click', function(e){
+  var b=e.target.closest('button[data-p]'); if(b) go(b.getAttribute('data-p'));
+});
+document.addEventListener('click', function(e){
+  var g=e.target.closest('[data-goto]'); if(g) go(g.getAttribute('data-goto'));
+});
+window.addEventListener('hashchange', function(){
+  var p=location.hash.slice(1); if(p && $('p-'+p)) go(p);
+});
+
+/* ---- data ----------------------------------------------------------- */
+function catalog(){
+  return j('/api/catalog').then(function(d){
+    if (d.error){ $('mgrid').innerHTML='<div class="err">'+esc(d.error)+'</div>'; return; }
+    S.cat = d.models||[]; S.live = d.running||[];
+    $('host').textContent = d.host||'?';
+    S.picked = new Set(S.live.filter(function(m){
+      var c=S.cat.filter(function(x){return x.id===m;})[0]; return c && CHAT[c.type]; }));
+    S.fit = new Set(S.live);
+    mgrid();
+  });
+}
+function board(){
+  return j('/api/leaderboard').then(function(d){ S.board=d; drawBoard(); drawBudget(); });
+}
+
+/* ---- dashboard ------------------------------------------------------ */
+function dash(){
+  if (!S.board) return board().then(dash);
+  var rows=S.board.rows||[];
+  var top=rows[0];
+  var best=rows.filter(function(r){return r.per_unit;}).sort(function(a,b){return b.per_unit-a.per_unit;})[0];
+  $('dstats').innerHTML =
+    stat('▲', top? top.decode_tok_s.toFixed(1)+'<small>tok/s</small>' : '—',
+         'fastest decode', top? sh(top.model):'run one to find out') +
+    stat('◈', best? best.per_unit.toFixed(2)+'<small>tok/s per unit</small>' : '—',
+         'best per NPU unit', best? sh(best.model):'—') +
+    stat('▣', String(rows.length), 'models measured',
+         (S.cat.length||0)+' installed on the box') +
+    stat('↻', String(S.runs||0), 'runs on disk', S.lastStamp||'—');
+  drawBoard($('dboard'), 4); drawBudget();
+  j('/api/runs').then(function(d){
+    var rs=(d.runs||[]).slice(0,5);
+    $('drecent').innerHTML = rs.length? rs.map(function(r){
+      return '<div class="d" style="padding:10px 15px;border-bottom:1px solid var(--line)">'
+        +'<div class="n" style="font-size:12.5px">'+esc(r.label||'run')+'</div>'
+        +'<div class="s" style="color:var(--dim);font-size:11px">'+esc(r.stamp)+' · '
+        +esc((r.models||[]).map(sh).join(', ')||'—')+'</div></div>';
+    }).join('') : '<div class="empty">nothing yet</div>';
+  });
+}
+function stat(ic,v,k,n){
+  return '<div class="stat"><div class="ic">'+ic+'</div><div class="v">'+v+'</div>'
+    +'<div class="k">'+esc(k)+'</div><div class="n">'+esc(n)+'</div></div>';
+}
+
+function drawBoard(el, limit){
+  el = el || $('board');
+  var rows=(S.board&&S.board.rows)||[];
+  if(!rows.length){ el.innerHTML='<div class="empty">No runs yet. Run one and this fills in.</div>'; return; }
+  var top=rows[0].decode_tok_s||1;
+  var use=limit? rows.slice(0,limit):rows;
+  el.innerHTML='<table><thead><tr><th></th><th>model</th><th class="num">decode</th>'
+    +'<th class="num">prefill peak</th><th class="num">NPU</th><th class="num">per unit</th>'
+    +'<th class="num">runs</th></tr></thead><tbody>'
+    + use.map(function(r){
+      var pct = r.decode_tok_s? (r.decode_tok_s/top*100):0;
+      return '<tr><td class="rank">'+String(r.rank).padStart(2,'0')+'</td>'
+      +'<td><div class="mname">'+esc(sh(r.model))+' '
+        +(r.loaded?'<span class="pill live">loaded</span>':'')+'</div>'
+      +'<div class="msub">'+esc(r.params||'')+(r.size_gb?' · '+r.size_gb+' GB':'')+'</div></td>'
+      +'<td class="num"><div style="display:flex;align-items:center;gap:9px;justify-content:flex-end">'
+        +'<span class="meter"><i style="width:'+pct.toFixed(0)+'%"></i></span>'
+        +'<b>'+(r.decode_tok_s?r.decode_tok_s.toFixed(1):'—')+'</b></div></td>'
+      +'<td class="num">'+(r.prefill_peak?Math.round(r.prefill_peak).toLocaleString():'—')+'</td>'
+      +'<td class="num">'+(r.npu||'—')+'</td>'
+      +'<td class="num" style="color:var(--hot)">'+(r.per_unit?r.per_unit.toFixed(2):'—')+'</td>'
+      +'<td class="num" style="color:var(--dim)">'+r.runs+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+
+/* ---- NPU budget ----------------------------------------------------- */
+function segs(ids, elId, rId){
+  var total=100, used=0, html='';
+  ids.forEach(function(id){
+    var c=S.cat.filter(function(x){return x.id===id;})[0]; if(!c) return;
+    var u=c.npu_usage||0; used+=u;
+    html+='<div class="seg" style="flex:'+u+';background:var(--orange);opacity:'
+      +(0.55+0.45*Math.min(1,u/60)).toFixed(2)+'" title="'+esc(c.id)+' · '+u+'u">'
+      +(u>=9? esc(sh(c.id)).slice(0,14)+' '+u : '')+'</div>';
+  });
+  var free=Math.max(0,total-used);
+  if(free>0) html+='<div class="seg free" style="flex:'+free+'">'+free+' free</div>';
+  if(used>total) html='<div class="seg" style="flex:1;background:var(--bad)">over budget by '+(used-total)+'</div>';
+  $(elId).innerHTML=html;
+  if(rId) $(rId).textContent=used+' / '+total+' units';
+  return {used:used, free:free};
+}
+function drawBudget(){
+  if(!S.cat.length) return;
+  var b=segs(S.live,'dbudget','budgetr');
+  $('dbudgetn').innerHTML='<b style="color:var(--steel)">'+esc(S.live.map(sh).join(', ')||'nothing loaded')
+    +'</b>. '+b.free+' units free. The device runs one inference at a time, so anything else '
+    +'you start will queue behind what is already there.';
+}
+
+/* ---- can I run it --------------------------------------------------- */
+function fit(){
+  if(!S.cat.length) return catalog().then(fit);
+  $('fitgrid').innerHTML=S.cat.map(function(m){
+    var on=S.fit.has(m.id);
+    return '<label class="mcard'+(on?' sel':'')+'" data-fit="'+esc(m.id)+'">'
+      +'<input type="checkbox"'+(on?' checked':'')+'>'
+      +'<div style="flex:1"><div class="t">'+esc(sh(m.id))+'</div>'
+      +'<div class="m"><b>'+esc(m.npu_usage||'?')+' units</b><span>'+esc(m.params||'')+'</span>'
+      +'<span>'+esc(m.type||'')+'</span></div></div></label>';
+  }).join('');
+  fitDraw();
+}
+function fitDraw(){
+  var b=segs(Array.from(S.fit),'fitbudget','fitr');
+  var names=Array.from(S.fit).map(sh).join(' + ')||'nothing';
+  $('fitverdict').innerHTML = b.used>100
+    ? '<span class="nofit">✕ Does not fit.</span> '+esc(names)+' wants '+b.used
+      +' units and the box has 100. Drop something, or run them one at a time.'
+    : '<span class="fits">✓ Fits.</span> '+esc(names)+' takes '+b.used+' of 100 units, leaving '
+      +b.free+'. They can all be resident at once, though the device still runs one '
+      +'inference at a time.';
+}
+$('fitgrid').addEventListener('click', function(e){
+  var l=e.target.closest('[data-fit]'); if(!l) return;
+  var id=l.getAttribute('data-fit');
+  if(S.fit.has(id)) S.fit.delete(id); else S.fit.add(id);
+  fit();
+});
+$('fitreset').addEventListener('click', function(){ S.fit=new Set(S.live); fit(); });
+
+/* ---- models & history ----------------------------------------------- */
+function models(){
+  if(!S.cat.length) return catalog().then(models);
+  $('catalog').innerHTML='<table><thead><tr><th>model</th><th class="num">params</th>'
+    +'<th class="num">size</th><th class="num">NPU</th><th>type</th><th></th></tr></thead><tbody>'
+    +S.cat.map(function(m){
+      return '<tr><td class="mname">'+esc(m.id)+'</td>'
+      +'<td class="num">'+esc(m.params||'—')+'</td>'
+      +'<td class="num">'+(((m.total_size||0)/1e9).toFixed(1))+' GB</td>'
+      +'<td class="num">'+esc(m.npu_usage||'—')+'</td>'
+      +'<td style="color:var(--steel)">'+esc(m.type||'—')+'</td>'
+      +'<td>'+(S.live.indexOf(m.id)>=0?'<span class="pill live">loaded</span>':'')
+      +(CHAT[m.type]?'':' <span class="pill">not measurable</span>')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+function history_(){
+  j('/api/runs').then(function(d){
+    var rs=d.runs||[]; S.runs=rs.length; S.lastStamp=rs[0]&&rs[0].stamp;
+    $('history').innerHTML= rs.length? '<table><thead><tr><th>when</th><th>label</th>'
+      +'<th>models</th><th>file</th></tr></thead><tbody>'
+      +rs.map(function(r){
+        return '<tr><td>'+esc(r.stamp)+'</td><td style="color:var(--hot)">'+esc(r.label||'')+'</td>'
+        +'<td>'+esc((r.models||[]).map(sh).join(', ')||'—')+'</td>'
+        +'<td style="color:var(--dim);font-size:11.5px">'+esc(r.file)+'</td></tr>';
+      }).join('')+'</tbody></table>' : '<div class="empty">nothing yet</div>';
+  });
+}
+
+/* ---- wizard --------------------------------------------------------- */
+function mgrid(){
+  var q=($('msearch').value||'').toLowerCase();
+  var list=S.cat.filter(function(m){ return !q || m.id.toLowerCase().indexOf(q)>=0; });
+  $('mgrid').innerHTML=list.map(function(m){
+    var ok=!!CHAT[m.type], on=S.picked.has(m.id), live=S.live.indexOf(m.id)>=0;
+    return '<label class="mcard'+(on?' sel':'')+(ok?'':' no')+'" data-m="'+esc(m.id)+'">'
+      +'<input type="checkbox"'+(on?' checked':'')+(ok?'':' disabled')+'>'
+      +'<div style="flex:1"><div class="t">'+esc(sh(m.id))
+      +(live?' <span class="pill live">loaded</span>':'')+'</div>'
+      +'<div class="m"><b>'+esc(m.params||'?')+'</b><span>'+esc(m.npu_usage||'?')+'u</span>'
+      +'<span>'+(((m.total_size||0)/1e9).toFixed(1))+' GB</span>'
+      +(ok?'':'<span style="color:var(--bad)">'+esc(m.type)+' · not a chat model</span>')
+      +'</div></div></label>';
+  }).join('')||'<div class="empty">nothing matches</div>';
+  wiz();
+}
+$('mgrid').addEventListener('click', function(e){
+  var l=e.target.closest('[data-m]'); if(!l||l.classList.contains('no')) return;
+  var id=l.getAttribute('data-m');
+  if(S.picked.has(id)) S.picked.delete(id); else S.picked.add(id);
+  mgrid();
+});
+$('msearch').addEventListener('input', mgrid);
+$('selloaded').addEventListener('click', function(){
+  S.picked=new Set(S.live.filter(function(m){
+    var c=S.cat.filter(function(x){return x.id===m;})[0]; return c&&CHAT[c.type]; })); mgrid(); });
+$('selall').addEventListener('click', function(){
+  S.picked=new Set(S.cat.filter(function(m){return CHAT[m.type];}).map(function(m){return m.id;}));
+  mgrid(); });
+$('selnone').addEventListener('click', function(){ S.picked=new Set(); mgrid(); });
+
+$('modes').innerHTML=MODES.map(function(m){
+  return '<div class="mode'+(m[0]===S.mode?' sel':'')+'" data-mode="'+m[0]+'">'
+    +'<div class="t">'+m[1]+'</div><div class="s">'+m[2].split(',').length+' test'
+    +(m[2].split(',').length>1?'s':'')+'</div><div class="d">'+m[3]+'</div></div>';
+}).join('');
+$('modes').addEventListener('click', function(e){
+  var d=e.target.closest('[data-mode]'); if(!d) return;
+  S.mode=d.getAttribute('data-mode');
+  var t=MODES.filter(function(m){return m[0]===S.mode;})[0];
+  S.tests=new Set(t[2].split(','));
+  draw2();
+});
+function draw2(){
+  var ms=$('modes').querySelectorAll('[data-mode]');
+  for(var i=0;i<ms.length;i++) ms[i].classList.toggle('sel', ms[i].getAttribute('data-mode')===S.mode);
+  $('tests').innerHTML=TESTS.map(function(t){
+    return '<button class="chip" data-t="'+t[0]+'" aria-pressed="'+(S.tests.has(t[0])?'true':'false')
+      +'" title="'+esc(t[2])+'">'+t[1]+'</button>';
+  }).join('');
+  wiz();
+}
+$('tests').addEventListener('click', function(e){
+  var b=e.target.closest('.chip'); if(!b) return;
+  var t=b.getAttribute('data-t');
+  if(S.tests.has(t)) S.tests.delete(t); else S.tests.add(t);
+  S.mode='custom'; draw2();
+});
+
+/* The one thing someone must understand before they press the button. */
+function impact(){
+  var n=S.picked.size;
+  var onlyLoaded = n>0 && Array.from(S.picked).every(function(m){return S.live.indexOf(m)>=0;})
+                   && n===1;
+  var mins=Math.max(1, Math.round(n*S.tests.size*1.7));
+  if(onlyLoaded){
+    return '<span class="ti">Nothing on your box changes</span>This model is already loaded, so '
+      +'the suite will not load, unload or restart anything. Expect about <b>'+mins+' minutes</b>.';
+  }
+  return '<span class="ti">This will load and unload models</span>The suite takes them one at a '
+    +'time and puts the box back the way it found it when it finishes. <b>Anything else using '
+    +'the device stops working while it runs</b>, including apps on other machines. Expect about '
+    +'<b>'+mins+' minutes</b>. Results are written after every model, so stopping early keeps '
+    +'whatever already finished.';
+}
+function wiz(){
+  var ss=$('steps').querySelectorAll('.step');
+  for(var i=0;i<ss.length;i++){
+    var n=+ss[i].getAttribute('data-s');
+    ss[i].classList.toggle('on', n===S.step);
+    ss[i].classList.toggle('done', n<S.step);
+  }
+  $('w1').hidden=S.step!==1; $('w2').hidden=S.step!==2; $('w3').hidden=S.step!==3;
+  $('back').hidden=S.step===1;
+  $('next').textContent=S.step===3?'Run benchmark':'Continue';
+  $('runcount').innerHTML='<span class="note" style="margin:0">'+S.picked.size+' model'
+    +(S.picked.size===1?'':'s')+' · '+S.tests.size+' test'+(S.tests.size===1?'':'s')+'</span>';
+  var ok = S.picked.size>0 && S.tests.size>0;
+  $('next').disabled = !ok || S.running;
+  $('wizinfo').innerHTML = !S.picked.size ? 'Pick at least one model.'
+    : !S.tests.size ? 'Pick at least one test.'
+    : '<b>'+S.picked.size+'</b> model'+(S.picked.size===1?'':'s')+' × <b>'+S.tests.size+'</b> test'
+      +(S.tests.size===1?'':'s')+' ≈ <b>'+Math.max(1,Math.round(S.picked.size*S.tests.size*1.7))
+      +' min</b>';
+  if(S.step===3){
+    $('impact').innerHTML=impact();
+    $('review').innerHTML=
+      stat('▣', String(S.picked.size), 'models', Array.from(S.picked).map(sh).join(', ').slice(0,60))
+      +stat('◉', String(S.tests.size), 'tests', Array.from(S.tests).join(', '))
+      +stat('◷', Math.max(1,Math.round(S.picked.size*S.tests.size*1.7))+'<small>min</small>',
+            'estimated', 'checkpointed after every model');
+  }
+}
+$('next').addEventListener('click', function(){
+  if(S.step<3){ S.step++; if(S.step===2) draw2(); else wiz(); return; }
+  start();
+});
+$('back').addEventListener('click', function(){ if(S.step>1){ S.step--; wiz(); } });
+
+function start(){
+  $('log').innerHTML=''; $('done').innerHTML='<div class="empty">nothing yet</div>';
+  $('viewreport').hidden=true;
+  connect();
+  go('live');
+  $('liveof').textContent=Array.from(S.picked).map(sh).join(', ');
+  j('/api/run',{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({models:Array.from(S.picked),tests:Array.from(S.tests),
+                         label:$('label').value.trim()||'run'})})
+   .then(function(d){ if(d.error) log('  '+d.error); });
+}
+$('stop').addEventListener('click', function(){
+  fetch('/api/stop',{method:'POST'}).then(function(){ log('\n  stopping after this model finishes'); });
+});
+
+/* ---- live ----------------------------------------------------------- */
+function log(line){
+  var b=$('log');
+  var d=document.createElement('div');
+  if(/^\s*[A-Z][A-Z ]{3,}/.test(line)) d.className='head';
+  else if(/^\s*(\[|----|model |build )/.test(line)) d.className='hi';
+  d.textContent=line;
+  b.appendChild(d);
+  while(b.children.length>900) b.removeChild(b.firstChild);
+  b.scrollTop=b.scrollHeight;
+}
+function phase(s){
+  S.running=!!s.running;
+  $('next').disabled = S.running || !S.picked.size || !S.tests.size;
+  $('stop').hidden=!S.running;
+  if(s.error){ $('lphase').textContent='failed'; $('lsub').textContent=s.error; return; }
+  if(S.running){
+    $('lphase').textContent=(s.model?sh(s.model):'starting')+(s.test?' · '+s.test:'');
+    $('lsub').textContent=(s.total?'model '+s.index+' of '+s.total+'  ':'')
+      +(s.elapsed_s?Math.round(s.elapsed_s)+'s':'')+(s.label?'  · '+s.label:'');
+    $('prog').style.width=(s.total?((s.index-1)/s.total*100):4)+'%';
+  } else {
+    $('lphase').textContent='idle';
+    $('lsub').textContent=s.last_file?('last: '+s.last_file):'';
+  }
+}
+/* The stream is opened while something is running and closed when it stops.
+   An idle tab holding an EventSource pins a server thread for no reason, and a
+   page that never finishes loading cannot be screenshotted or embedded. When
+   idle we poll instead, so a run started from the CLI or another tab still
+   shows up here. */
+var es=null, poll=null;
+function connect(){
+  if(es) return;
+  es=new EventSource('/events');
+  ['line','state','model','saved','finished','failed'].forEach(function(k){
+    es.addEventListener(k,wire(k));
+  });
+  es.onerror=function(){ /* EventSource retries on its own; stay quiet */ };
+}
+function disconnect(){ if(es){ es.close(); es=null; } }
+function idlePoll(){
+  if(poll) return;
+  poll=setInterval(function(){
+    if(S.running) return;
+    j('/api/state').then(function(d){ if(d.running){ connect(); } phase(d); })
+      .catch(function(){});
+  }, 4000);
+}
+function wire(k){
+  return function(ev){
+    var d={}; try{ d=JSON.parse(ev.data); }catch(x){}
+    if(k==='line') log(d.line==null?'':d.line);
+    else if(k==='state') phase(d);
+    else if(k==='model'){
+      var b=$('done'); if(b.querySelector('.empty')) b.innerHTML='';
+    }
+    else if(k==='saved'){
+      var b=$('done'); if(b.querySelector('.empty')) b.innerHTML='';
+      b.innerHTML+='<div class="d"><div class="n">'+esc(d.file)+'</div>'
+        +'<div class="s">'+d.models+' model'+(d.models===1?'':'s')+' saved</div></div>';
+      history_();
+    }
+    else if(k==='finished'){
+      $('prog').style.width='100%'; $('viewreport').hidden=false;
+      board(); catalog(); history_();
+      $('rframe').src='/report?'+Date.now();
+      setTimeout(disconnect, 1500);
+    }
+    else if(k==='failed') log('  '+d.error);
+  };
+}
+$('viewreport').addEventListener('click', function(){ go('report'); });
+
+/* ---- report --------------------------------------------------------- */
+$('rebuild').addEventListener('click', function(){
+  fetch('/api/report',{method:'POST'}).then(function(){ $('rframe').src='/report?'+Date.now(); });
+});
+$('openreport').addEventListener('click', function(){
+  fetch('/api/report',{method:'POST'}).then(function(){ window.open('/report','_blank'); });
+});
+
+/* ---- method --------------------------------------------------------- */
+$('method').innerHTML=[
+  ["Prefill","The same deterministic filler repeated to four lengths, each asking for a "
+   +"four-token answer so decode barely registers. Plotted is the device's own reported "
+   +"prefill rate, not a stopwatch."],
+  ["Sustained","One unbroken 1500-token generation, with NPU utilisation sampled on a thread "
+   +"while it runs. Short bursts flatter a box; this is the number that holds."],
+  ["Concurrency","1, 2, 4 and 8 identical requests fired at once from separate threads. "
+   +"Aggregate is total tokens over wall time; per-stream is the median each caller saw."],
+  ["Reasoning","One arithmetic word problem asked with thinking off and then on. The ratio is "
+   +"wall time, because that is what a person waits."],
+  ["What it does not do","No quality evaluation of any kind. Nothing here says a model is good, "
+   +"only how fast it is. A fast wrong answer is still wrong."],
+  ["What it does not touch","By default the suite loads and unloads nothing and benchmarks "
+   +"whatever was already running. Sweeps that do load models put the box back after."]
+].map(function(m){
+  return '<div class="card"><div class="hd">'+esc(m[0])+'</div><div class="bd">'
+    +'<p style="color:var(--steel);font-size:12.5px;text-wrap:pretty">'+esc(m[1])+'</p></div></div>';
+}).join('');
+
+/* ---- go ------------------------------------------------------------- */
+catalog().then(function(){ return board(); }).then(function(){
+  history_();
+  idlePoll();
+  j('/api/state').then(function(d){ phase(d); if(d.running){ connect(); go('live'); } });
+  var p=location.hash.slice(1);
+  go(p && $('p-'+p) ? p : 'dash');
+});
+})();
+</script>
+</html>

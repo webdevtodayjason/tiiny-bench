@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">TiinyBench favicon</title>
+  <desc id="desc">A white pixel T standing on an orange workbench against a charcoal rounded square.</desc>
+  <rect width="512" height="512" rx="88" fill="#101214"/>
+  <g shape-rendering="crispEdges">
+    <!-- Tiiny-style T -->
+    <path fill="#F5F3EE" d="M112 104h288v80H296v168h-80V184H112z"/>
+    <!-- Workbench top -->
+    <path fill="#EF7D22" d="M80 352h352v64H80z"/>
+    <!-- Bench legs and feet -->
+    <path fill="#EF7D22" d="M120 416h72v32h16v24H104v-24h16zM320 416h72v32h16v24H304v-24h16z"/>
+    <!-- Small joinery details -->
+    <rect x="136" y="372" width="24" height="24" rx="4" fill="#101214"/>
+    <rect x="352" y="372" width="24" height="24" rx="4" fill="#101214"/>
+  </g>
+</svg>
