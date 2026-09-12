@@ -1,0 +1,41 @@
+{
+  "manifest": 1,
+  "id": "tiiny-bench",
+  "name": "TiinyBench",
+  "tagline": "Measure what your box actually does, not what the spec sheet says.",
+  "description": "Prefill against prompt length, throughput over a long generation, what happens when more than one person uses the box, and what a reasoning model charges for the tokens nobody reads. Produces one self-contained HTML report you can email.",
+  "author": {"name": "Jason Brashear", "github": "webdevtodayjason"},
+  "license": "MIT",
+  "repo": "https://github.com/webdevtodayjason/tiiny-bench",
+  "icon": "assets/tiinybench-favicon.svg",
+  "categories": ["tools", "benchmarks", "diagnostics"],
+
+  "needs": {
+    "models": [],
+    "npu_resident": 0,
+    "npu_peak": 0,
+    "runtime": {"python": ">=3.9", "deps": []},
+    "disk_mb": 50
+  },
+
+  "asks_for": [
+    {"what": "device-key", "why": "to run timed calls against your models"},
+    {"what": "network-lan", "why": "to reach the Tiiny on your own network"},
+    {"what": "disk", "why": "results are plain JSON, one file per run", "path": "./bench-results"}
+  ],
+
+  "provides": {"web": {"port": 8425, "path": "/"}, "cli": "tiiny-bench"},
+
+  "plant": {
+    "get": "git clone https://github.com/webdevtodayjason/tiiny-bench",
+    "run": "python3 tiiny-bench --serve",
+    "check": "python3 tiiny-bench --catalog",
+    "env": ["TIINY_HOST", "TIINY_KEY"]
+  },
+
+  "privacy": {
+    "egress": "none",
+    "telemetry": false,
+    "stores": "Timing results as JSON, and a generated HTML report."
+  }
+}

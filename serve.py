@@ -212,6 +212,60 @@ JOBS = [
 ]
 
 
+def fits(models):
+    """Whether a set of models can be resident at once on THIS box.
+
+    Answers three separate questions, because they fail differently: is each
+    one installed, do they add up to under a hundred units, and is there room
+    right now given what is already loaded."""
+    try:
+        tok = bench.key()
+        cat = {m["id"]: m for m in bench.catalog(tok)}
+        live = bench.running(tok)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+    rows, missing, need = [], [], 0
+    for m in models:
+        c = cat.get(m)
+        if not c:
+            missing.append(m)
+            rows.append({"model": m, "installed": False})
+            continue
+        u = c.get("npu_usage") or 0
+        need += u
+        rows.append({"model": m, "installed": True, "npu": u,
+                     "loaded": m in live, "params": c.get("params"),
+                     "type": c.get("type")})
+
+    used_now = sum((cat.get(m, {}).get("npu_usage") or 0) for m in live)
+    already = sum((cat.get(m, {}).get("npu_usage") or 0)
+                  for m in models if m in live)
+    # What starting this app would add on top of what is running.
+    extra = need - already
+    verdict = ("missing" if missing else
+               "no" if need > 100 else
+               "yes" if used_now + extra <= 100 else "after-unloading")
+    return {
+        "verdict": verdict,
+        "models": rows,
+        "missing": missing,
+        "npu_needed": need,
+        "npu_total": 100,
+        "npu_used_now": used_now,
+        "npu_free_now": 100 - used_now,
+        "npu_extra_needed": max(0, extra),
+        "loaded_now": live,
+        "note": {
+            "missing": "Some of these are not installed on this box yet.",
+            "no": f"These want {need} units and the box has 100. They cannot all be resident.",
+            "yes": "Fits, and there is room for it right now.",
+            "after-unloading": ("Fits in the budget, but something loaded now has to come "
+                                "out first."),
+        }[verdict],
+    }
+
+
 def leaderboard():
     """Best measured figures per model, grouped by what kind of model it is.
 
@@ -407,6 +461,13 @@ class Handler(BaseHTTPRequestHandler):
             ctype = ("image/svg+xml" if name.endswith(".svg")
                      else "image/png" if name.endswith(".png") else "application/octet-stream")
             return self._file(f, ctype)
+        if p == "/api/fit":
+            # What tiinyapp.farm asks on an app's behalf: "will this run on
+            # MY box?" The farm cannot know that - it does not know what is
+            # installed or what is already loaded. This does.
+            q = urllib.parse.parse_qs(u.query)
+            want = [m for m in (q.get("models") or [""])[0].split(",") if m]
+            return self._json(fits(want))
         if p == "/api/leaderboard":
             return self._json(leaderboard())
         if p == "/api/runs":
