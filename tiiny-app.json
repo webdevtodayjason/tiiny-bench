@@ -2,6 +2,7 @@
   "manifest": 1,
   "id": "tiiny-bench",
   "name": "TiinyBench",
+  "version": "0.1.1",
   "tagline": "Measure what your box actually does, not what the spec sheet says.",
   "description": "Prefill against prompt length, throughput over a long generation, what happens when more than one person uses the box, and what a reasoning model charges for the tokens nobody reads. Produces one self-contained HTML report you can email.",
   "author": {"name": "Jason Brashear", "github": "webdevtodayjason"},
@@ -29,8 +30,8 @@
   "plant": {
     "get": "git clone https://github.com/webdevtodayjason/tiiny-bench",
     "run": "python3 tiiny-bench --serve",
-    "check": "python3 tiiny-bench --catalog",
-    "env": ["TIINY_HOST", "TIINY_KEY"]
+    "check": "python3 tiiny-bench --where",
+    "env": ["TIINY_BASE", "TIINY_KEY"]
   },
 
   "privacy": {

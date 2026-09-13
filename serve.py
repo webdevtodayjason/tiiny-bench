@@ -125,9 +125,13 @@ def run_suite(label, models, tests):
         cat = {m["id"]: m for m in bench.catalog(tok)}
         was = bench.running(tok)
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        info = bench.api(f"http://{bench.HOST}/api/v1/sys/device_info", tok, timeout=20)
+        info = bench.api(bench.mgmt("/api/v1/sys/device_info"), tok, timeout=20)
         rec = {"label": label, "stamp": stamp, "build": info.get("tiiny_os"),
-               "host": bench.HOST, "suite_version": 2, "models": []}
+               "host": bench.HOST, "suite_version": 2,
+               "bench_version": bench.VERSION,
+               "connection": bench.where(),
+               "firmware": bench.firmware(info),
+               "models": []}
         path = bench.OUT / f"{stamp}-suite-{label}.json"
         S.last_file = path.name
 
@@ -452,14 +456,20 @@ class Handler(BaseHTTPRequestHandler):
             # and nothing that would leak the key back out to the page.
             key, how = "", "none"
             try:
-                k = bench.key()
-                key, how = k, "env" if os.environ.get("TIINY_KEY") else "saved"
+                key = bench.key()
+                how = bench.KEY_SOURCE or "saved"
             except SystemExit:
                 pass
+            w = bench.where()
             return self._json({
-                "host": bench.HOST, "port": bench.GW,
-                "candidates": list(bench.CANDIDATES),
-                "device": bench.identify(bench.HOST, bench.GW),
+                "host": w["host"], "port": w["gateway_port"],
+                "candidates": list(bench.PROXY_HOSTS),
+                "device": bench.identify(),
+                "source": w["source"],
+                "plane": w["plane"],
+                "serial": w["serial"],
+                "transport": w["gateway_transport"],
+                "vhost": w["gateway_vhost"],
                 "key_set": bool(key),
                 "key_hint": (key[:4] + "\u2026" + key[-4:]) if key else "",
                 "key_source": how,
@@ -592,30 +602,30 @@ class Handler(BaseHTTPRequestHandler):
             host = (body.get("host") or "").strip()
             newkey = (body.get("key") or "").strip()
             if host:
-                hit = bench.reachable(host)
-                if not hit:
+                if not bench.reachable(host):
                     return self._json(
                         {"error": f"nothing answering at {host}. The gateway should "
-                                  f"return 401 on /v1/models; check the address."}, 400)
-                bench.HOST, bench.GW = hit
-                bench.save_config(host=bench.HOST)
+                                  f"return 401 on /v1/models, on its own port or on "
+                                  f"port 80 as p8800.api.tiiny; check the address."}, 400)
+                bench.save_config(host=host, plane="given")
+                bench.connect(host=host)
             elif body.get("rediscover"):
-                h, g = bench.discover()
-                if not h:
-                    return self._json(
-                        {"error": "no Tiiny found. Tried: "
-                                  + ", ".join(bench.CANDIDATES)}, 404)
-                bench.HOST, bench.GW = h, g
+                w, err = bench.connect_soft(rescan=True)
+                if not w:
+                    return self._json({"error": err}, 404)
             if newkey:
                 # Check it against the device before saving, so a typo is caught
                 # here rather than surfacing as a confusing failure mid-run.
-                probe = bench.api(f"http://{bench.HOST}:{bench.GW}/api/v1/models/running",
-                                  newkey)
+                probe = bench.api(bench.gw("/api/v1/models/running"), newkey, timeout=20)
                 if "_error" in probe:
                     return self._json({"error": "the device rejected that key"}, 400)
                 bench.save_config(key=newkey)
-            return self._json({"ok": True, "host": bench.HOST, "port": bench.GW,
-                               "device": bench.identify(bench.HOST, bench.GW)})
+            w = bench.where()
+            return self._json({"ok": True, "host": w["host"],
+                               "port": w["gateway_port"],
+                               "plane": w["plane"], "source": w["source"],
+                               "transport": w["gateway_transport"],
+                               "device": bench.identify()})
         if u.path == "/api/manage":
             if S.running:
                 return self._json(
@@ -674,13 +684,21 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, "no such path", "text/plain")
 
 
-def run(port=8425):
+def run(port=8425, host=None, serial=None, rescan=False):
     bench.OUT.mkdir(exist_ok=True)
     bench.SINK = sink
+    # A box that cannot be found is not a reason to refuse to start: the
+    # settings panel exists so somebody can type the address in.
+    w, err = bench.connect_soft(host=host, serial=serial, rescan=rescan)
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     srv.daemon_threads = True
-    print(f"\n  TiinyBench  http://127.0.0.1:{port}/")
-    print(f"  device      {bench.HOST}")
+    print(f"\n  TiinyBench {bench.VERSION}  http://127.0.0.1:{port}/")
+    if w:
+        print(f"  device      {w['host']}  ({w['plane']} plane, "
+              f"{w['gateway_transport']}, found by {w['source']})")
+    else:
+        print("  device      not found yet. Open the app and set the address.")
+        print("              " + err.replace("\n", "\n              "))
     print(f"  results     {bench.OUT}\n")
     try:
         srv.serve_forever()

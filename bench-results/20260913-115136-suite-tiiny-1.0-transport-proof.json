@@ -1,0 +1,65 @@
+{
+  "label": "tiiny-1.0-transport-proof",
+  "stamp": "20260913-115136",
+  "build": "0.1.34",
+  "host": "192.168.100.94",
+  "suite_version": 2,
+  "bench_version": "0.1.1",
+  "connection": {
+    "host": "192.168.100.94",
+    "source": "/Users/sem/.config/tiiny-bench.json",
+    "plane": "lan",
+    "serial": "TNYM26072400300011Q",
+    "gateway_transport": "vhost",
+    "gateway_port": 80,
+    "gateway_vhost": "p8800.api.tiiny",
+    "services": {
+      "gateway": "vhost",
+      "mgmt": "direct"
+    }
+  },
+  "firmware": {
+    "tiiny_os": "0.1.34",
+    "version": "0.1.30"
+  },
+  "models": [
+    {
+      "model": "Qwen/Qwen3-Embedding-0.6B",
+      "params": "0.6B",
+      "type": "Text Embedding",
+      "npu_usage": 1,
+      "total_size": 924213804,
+      "elapsed_s": 2.1,
+      "npu_mem_total_mb": 11461,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.235,
+              "returned": 1,
+              "dim": 1024,
+              "per_s": 4.3
+            },
+            {
+              "batch": 8,
+              "wall_s": 0.39,
+              "returned": 8,
+              "dim": 1024,
+              "per_s": 20.5
+            },
+            {
+              "batch": 32,
+              "wall_s": 1.459,
+              "returned": 32,
+              "dim": 1024,
+              "per_s": 21.9
+            }
+          ],
+          "emb_per_s": 21.9,
+          "dim": 1024
+        }
+      }
+    }
+  ]
+}
