@@ -1100,17 +1100,25 @@ function conn(){
     $('connstats').innerHTML =
         connStat('device', dev.name || 'found, unnamed')
       + connStat('reached at', d.host + (d.port===80 ? '' : ':'+d.port))
-      + connStat('firmware', dev.os ? 'TiinyOS '+dev.os : '-')
+      + connStat('how', (d.plane||'?') + ', ' +
+          (d.transport==='vhost' ? 'port 80 as '+d.vhost : 'direct port '+d.port))
+      + connStat('found by', d.source || '-')
+      + connStat('firmware', dev.os ? 'TiinyOS '+dev.os
+                 + (dev.service ? ', service '+dev.service : '') : '-')
+      + connStat('serial', d.serial || dev.serial || '-')
       + connStat('memory', dev.ram || '-')
       + connStat('storage', dev.storage || '-')
-      + connStat('api key', d.key_set ? (d.key_source==='env'?'from TIINY_KEY':'saved') : 'not set');
+      + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set');
     $('connhost').value = '';
     $('connhost').placeholder = d.host;
-    $('conncand').textContent = 'tried in order: ' + (d.candidates||[]).join(', ');
+    $('conncand').textContent = 'USB /30 peers first, then this machine’s own /24 '
+      + 'on :39218, then ' + (d.candidates||[]).join(', ');
     $('connkeyr').textContent = d.key_set ? d.key_hint : 'needed';
     $('connkeyn').textContent = d.key_set
-      ? (d.key_source==='env' ? 'Using TIINY_KEY from the environment; it wins over anything saved.'
-                              : 'Saved in ' + d.config + ', readable only by you.')
+      ? (d.key_source==='TIINY_KEY'
+           ? 'Using TIINY_KEY from the environment; it wins over anything saved.'
+           : 'Read from ' + (d.key_source || d.config) + '. A key pasted here is saved in '
+             + d.config + ', readable only by you.')
       : 'No key yet. The benchmark cannot talk to the device without one.';
     return d;
   });

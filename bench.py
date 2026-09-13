@@ -18,6 +18,7 @@ is already running and leaves the box exactly as it found it. `--all` and
 `--model` are the two flags that change that, and they say so before they start.
 """
 import argparse
+import errno
 import glob
 import json
 import pathlib
@@ -31,26 +32,156 @@ import urllib.parse
 import urllib.request
 import os
 
+VERSION = "0.1.1"
+
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
 
-# Where a saved device and key live, so discovery runs once rather than on
+# ------------------------------------------------------------------ finding it
+#
+# Firmware 1.0 changed how a Tiiny is addressed, twice over: the AI gateway no
+# longer answers on its own port from another machine, and a box's LAN address
+# is a DHCP lease that moves. So nothing here is a constant any more. The
+# address is resolved at startup, in this order, and the source is always
+# printed so a run can never quietly measure a box you did not mean:
+#
+#   TIINY_BASE / TIINY_KEY      what the farm CLI puts in the environment
+#   ~/.tiinyapps/device.json    what `farm device` writes, {"base", "key"}
+#   --host                      an address typed on the command line
+#   the saved config below      whatever the last successful run found
+#   a scan                      USB links first, then this host's own /24
+#
+# The scan is the only step that identifies a box rather than just finding an
+# open port, because :39218/device.json carries the serial.
+
+# Where a saved device and key live, so the scan runs once rather than on
 # every invocation. The web UI writes this too.
 CONFIG = pathlib.Path(
     os.environ.get("XDG_CONFIG_HOME") or (pathlib.Path.home() / ".config")
 ) / "tiiny-bench.json"
 
-# A stock Tiiny answers on several addresses at once and which ones exist
-# depends on how it is attached. In rough order of how fast they resolve:
+# What the farm hands an app when it gives it a box: {"base": ..., "key": ...}.
+FARM_DEVICE = pathlib.Path.home() / ".tiinyapps" / "device.json"
+
+# Unauthenticated device metadata. The only endpoint that answers identically
+# on every firmware and both transports, and the only one carrying the serial.
+DISCO_PORT = 39218
+DISCO_PATH = "/device.json"
+
+# A USB-attached Tiiny is a point-to-point /30 inside 172.17/16.
+USB_NET = "172.17."
+
+# Names the TiinyOS desktop app puts in /etc/resolver, pointed at a proxy on
+# this machine. They work on a Mac running that app and nowhere else, so they
+# are a shortcut tried after the scan finds nothing, not the primary route.
+PROXY_HOSTS = ("tiiny", "openai.api.tiiny", "tiiny.local")
+
+# ---------------------------------------------------------------- transport
 #
-#   tiiny, *.api.tiiny   the TiinyOS app writes /etc/resolver entries pointing
-#                        these at a local proxy, so they work on any Mac with
-#                        the app, whatever the device's actual address is
-#   172.17.7.177         the USB link is a fixed /30, so this never changes
-#   tiiny.local          mDNS, for machines without the app
+# Firmware 1.0 moved the AI gateway behind port 80. It still binds
+# 172.17.0.1:8800 for the container bridge, so a direct connect from another
+# machine now gets ECONNREFUSED, and every service arrives on 80 where a router
+# picks one out of the Host header.
 #
-# The old default here was tiiny.local, which resolves on nothing we tested.
-CANDIDATES = ("tiiny", "openai.api.tiiny", "172.17.7.177", "tiiny.local")
+# Both shapes are in the field, so both are supported: the service's own port
+# is tried first and ONLY a refused connection moves it to the vhost. A timeout
+# or a bad address must not, or a busy box looks like old firmware and the real
+# fault gets buried under a second, less honest error.
+#
+#   service      own port   vhost on port 80
+SERVICES = {
+    "gateway": (8800, "p8800.api.tiiny"),   # models, NPU, inference
+    "openai":  (8800, "openai.api.tiiny"),  # the OpenAI-compatible surface
+    "mgmt":    (80,   None),                # device management, always on 80
+}
+
+# service -> "direct" or "vhost". Decided by the first call that gets an
+# answer and reused for the rest of the run, so the dead port is probed once.
+TRANSPORT = {}
+
+HOST = ""          # resolved by connect()
+PORT_OVERRIDE = None   # a port carried in TIINY_BASE, or TIINY_PORT
+SOURCE = ""        # which step of the chain above answered
+PLANE = ""         # "usb", "lan", "proxy" or "given"
+DEVICE = {}        # what device.json said, when we got it from a scan
+KEY_SOURCE = ""    # where key() found the key, set by key()
+
+
+class Call:
+    """A path on one of the device's services, not yet a URL.
+
+    The URL cannot be fixed at the call site any more: which port and which
+    headers reach a service depends on the firmware, and the only way to know
+    is to try. So call sites name a service and a path and api() resolves it.
+    """
+    __slots__ = ("service", "path")
+
+    def __init__(self, service, path):
+        self.service = service
+        self.path = path
+
+    def __str__(self):
+        return "%s%s" % (self.service, self.path)
+
+
+def gw(path):
+    """Models, NPU and inference."""
+    return Call("gateway", path)
+
+
+def oai(path):
+    """The OpenAI-compatible surface."""
+    return Call("openai", path)
+
+
+def mgmt(path):
+    """Device management: /api/v1/sys/*."""
+    return Call("mgmt", path)
+
+
+def _own_port(service):
+    """The service's own port, before any vhost fallback."""
+    port = SERVICES[service][0]
+    if service != "mgmt" and PORT_OVERRIDE:
+        return PORT_OVERRIDE
+    return port
+
+
+def _attempts(target):
+    """(url, extra headers, mode) to try for a target, best first."""
+    if isinstance(target, str):
+        return [(target, {}, None)]
+    vhost = SERVICES[target.service][1]
+    known = TRANSPORT.get(target.service)
+    modes = [known] if known else (["direct", "vhost"] if vhost else ["direct"])
+    out = []
+    for m in modes:
+        if m == "vhost" and vhost:
+            out.append(("http://%s:80%s" % (HOST, target.path), {"Host": vhost}, m))
+        elif m == "direct":
+            out.append(("http://%s:%d%s" % (HOST, _own_port(target.service),
+                                            target.path), {}, m))
+    return out
+
+
+def _mark(target, mode):
+    """Remember which transport reached a service, for the rest of the run."""
+    if mode and not isinstance(target, str):
+        TRANSPORT[target.service] = mode
+
+
+def _refused(exc):
+    """True only for "nothing is listening on that port".
+
+    Deliberately narrow. This is the one condition that means the firmware has
+    moved the service rather than that the address or the box is wrong.
+    """
+    if isinstance(exc, urllib.error.HTTPError):
+        return False                    # it answered, so the port is open
+    reason = getattr(exc, "reason", exc)
+    if isinstance(reason, ConnectionRefusedError):
+        return True
+    return getattr(reason, "errno", None) == errno.ECONNREFUSED
 
 
 def _config():
@@ -73,116 +204,374 @@ def save_config(**kw):
     return cfg
 
 
-def reachable(host, timeout=1.5):
-    """(host, port) if the AI gateway answers here, else None.
+def _farm_device():
+    """What `farm device` wrote, or an empty dict."""
+    try:
+        d = json.loads(FARM_DEVICE.read_text())
+        return d if isinstance(d, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
 
-    401 counts as found: it means the gateway is listening and wants a key,
-    which is exactly the thing we are looking for. Only 404 and a dead socket
-    mean "not the device".
+
+def _split_base(base):
+    """A base URL or bare address as (address, explicit port or None).
+
+    Accepts everything the farm and the environment actually contain:
+    "1.2.3.4", "http://1.2.3.4", "http://1.2.3.4:8800/", a hostname, or a
+    hostname with a port.
     """
-    for port in (80, 8800):
-        url = "http://%s:%d/v1/models" % (host, port)
-        try:
-            req = urllib.request.Request(url, headers={"Authorization": "Bearer probe"})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                if r.status != 404:
-                    return host, port
-        except urllib.error.HTTPError as exc:
-            if exc.code != 404:
-                return host, port
-        except Exception:  # noqa: BLE001
-            continue
-    return None
+    base = (base or "").strip()
+    if not base:
+        return None, None
+    if "//" not in base:
+        base = "http://" + base
+    try:
+        u = urllib.parse.urlsplit(base)
+        return (u.hostname or None), u.port
+    except ValueError:
+        return None, None
 
 
-def discover(timeout=1.5):
-    """First address that answers. Saved, so the next run skips straight to it."""
-    tried = []
-    saved = _config().get("host")
-    for host in ([saved] if saved else []) + list(CANDIDATES):
-        if not host or host in tried:
-            continue
-        tried.append(host)
-        hit = reachable(host, timeout)
-        if hit:
-            if host != saved:
-                save_config(host=host)
-            return hit
-    return None, None
+# -------------------------------------------------------------- discovery
+def device_json(addr, timeout=0.6):
+    """What a box at this address says about itself, or None.
 
-
-def identify(host, port=80, timeout=3.0):
-    """What this device says it is. Unauthenticated, so it works before a key
-    is entered - which is the point, since the UI wants to show the user what
-    it found before asking them for anything.
-
-    /api/v1/sys/device_info is served on the gateway port, so it comes back
-    through the TiinyOS proxy hostnames as well as a direct address. The 39218
-    discovery endpoint carries the serial but only answers on a real address,
-    so it is a bonus rather than the source.
+    Unauthenticated, and the response carries serial_number, which is what
+    lets two addresses for the same box be recognised as one box.
     """
-    out = {}
     try:
         with urllib.request.urlopen(
-                "http://%s:%d/api/v1/sys/device_info" % (host, port), timeout=timeout) as r:
+                "http://%s:%d%s" % (addr, DISCO_PORT, DISCO_PATH),
+                timeout=timeout) as r:
             d = json.load(r)
-        out = {"name": d.get("device_name"), "model": d.get("device_model_name"),
-               "os": d.get("tiiny_os"), "ram": d.get("ram"),
-               "storage": d.get("storage"), "serial": d.get("sn")}
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(d, dict) or not d.get("serial_number"):
+        return None
+    return d
+
+
+def _mask_bits(mask):
+    """Prefix length from either form of netmask a system tool prints."""
+    if mask.startswith("0x"):
+        return bin(int(mask, 16)).count("1")
+    parts = [int(x) for x in mask.split(".")]
+    if len(parts) != 4:
+        raise ValueError(mask)
+    n = 0
+    for p in parts:
+        n = (n << 8) | p
+    return bin(n).count("1")
+
+
+def interfaces():
+    """(address, prefix length) for every IPv4 this host holds.
+
+    Stdlib only, so this asks the system's own tool: `ip` on Linux, `ifconfig`
+    on macOS and the BSDs. A machine where neither runs gets no
+    interface-derived candidates and falls back to the rest of the chain.
+    """
+    out = []
+    try:
+        txt = subprocess.run(["ip", "-o", "-4", "addr", "show"],
+                             capture_output=True, text=True, timeout=5).stdout
+        for line in txt.splitlines():
+            for f in line.split():
+                if "/" in f and f[0].isdigit():
+                    a, _, p = f.partition("/")
+                    try:
+                        out.append((a, int(p)))
+                    except ValueError:
+                        pass
+                    break
     except Exception:  # noqa: BLE001
         pass
-    if not out.get("serial"):
+    if out:
+        return out
+    try:
+        txt = subprocess.run(["ifconfig", "-a"], capture_output=True,
+                             text=True, timeout=5).stdout
+    except Exception:  # noqa: BLE001
+        return out
+    for line in txt.splitlines():
+        f = line.split()
+        if not f or f[0] != "inet" or "netmask" not in f:
+            continue
         try:
-            with urllib.request.urlopen(
-                    "http://%s:39218/device.json" % host, timeout=1.5) as r:
-                d = json.load(r)
-            out.setdefault("name", d.get("device_name"))
-            out["serial"] = d.get("serial_number")
-            out["transport"] = d.get("transport")
-        except Exception:  # noqa: BLE001
-            pass
-    return {k: v for k, v in out.items() if v}
+            out.append((f[1], _mask_bits(f[f.index("netmask") + 1])))
+        except (ValueError, IndexError):
+            continue
+    return out
 
 
-HOST = os.environ.get("TIINY_HOST", "").strip()
-def _gateway_port(host, timeout=2.0):
-    """Which port serves the AI gateway on this device.
+def usb_peers():
+    """The device end of every attached USB link.
 
-    Firmware 1.0.0 moved it. The gateway now binds 172.17.0.1:8800, the docker
-    bridge only, and serves the same surface on port 80. Older firmware keeps it
-    on 8800 and uses 80 for device management, so a plain TCP probe cannot tell
-    the two apart - port 80 answers on both. Asking for an AI route can: the
-    firmware that does not serve it 404s.
-
-    TIINY_PORT overrides, for anyone who has put it somewhere else.
+    A Tiiny's USB interface is a point-to-point /30: four addresses, of which
+    the box takes the first usable one and the host the second. So the peer is
+    arithmetic rather than a guess, and somebody with four boxes plugged in has
+    four of these on four separate /30s.
     """
-    env = os.environ.get("TIINY_PORT")
-    if env:
-        return int(env)
-    for port in (80, 8800):
+    peers = []
+    for addr, bits in interfaces():
+        if bits != 30 or not addr.startswith(USB_NET):
+            continue
         try:
-            req = urllib.request.Request(
-                "http://%s:%d/v1/models" % (host, port),
-                headers={"Authorization": "Bearer probe"})
+            o = [int(x) for x in addr.split(".")]
+        except ValueError:
+            continue
+        n = (o[0] << 24) | (o[1] << 16) | (o[2] << 8) | o[3]
+        base = n & ~3
+        for cand in (base + 1, base + 2):
+            if cand != n:
+                peers.append("%d.%d.%d.%d" % (
+                    (cand >> 24) & 255, (cand >> 16) & 255,
+                    (cand >> 8) & 255, cand & 255))
+    return peers
+
+
+def lan_candidates():
+    """Every other address in the /24 around each of this host's LAN addresses.
+
+    A /24 is 254 probes, about a second threaded, and it is the only thing that
+    finds a box whose DHCP lease moved. Only the /24 the host sits in: sweeping
+    a /16 to locate a Tiiny is not something a benchmark should do to
+    somebody's network.
+    """
+    out, seen = [], set()
+    for addr, bits in interfaces():
+        if addr.startswith("127.") or addr.startswith(USB_NET) or bits >= 31:
+            continue
+        head = addr.rsplit(".", 1)[0]
+        for i in range(1, 255):
+            cand = "%s.%d" % (head, i)
+            if cand != addr and cand not in seen:
+                seen.add(cand)
+                out.append(cand)
+    return out
+
+
+def scan(timeout=0.6, workers=64):
+    """Every Tiiny this host can see, deduped by serial, USB first.
+
+    A box on Wi-Fi and USB at once answers on both and the two addresses are
+    one device. USB wins the tie: a /30 handed out by the cable cannot move,
+    while a DHCP lease can and did.
+    """
+    found = {}
+    lock = threading.Lock()
+
+    def probe(addr, plane):
+        d = device_json(addr, timeout)
+        if not d:
+            return
+        rec = {"addr": addr, "plane": plane,
+               "serial": d.get("serial_number"),
+               "name": d.get("device_name"),
+               "transport": d.get("transport")}
+        with lock:
+            cur = found.get(rec["serial"])
+            if cur is None or (cur["plane"] == "lan" and plane == "usb"):
+                found[rec["serial"]] = rec
+
+    for plane, addrs in (("usb", usb_peers()), ("lan", lan_candidates())):
+        for i in range(0, len(addrs), workers):
+            ths = [threading.Thread(target=probe, args=(a, plane))
+                   for a in addrs[i:i + workers]]
+            for t in ths:
+                t.start()
+            for t in ths:
+                t.join()
+    return sorted(found.values(), key=lambda r: (r["plane"] != "usb", r["addr"]))
+
+
+def reachable(host, timeout=2.5):
+    """Does the AI gateway answer at this address, either way round?
+
+    401 counts as found: the gateway is listening and wants a key, which is
+    exactly the thing we are looking for. Only 404 and a dead socket mean "not
+    a Tiiny". Runs outside the transport cache on purpose, so probing a
+    candidate cannot leave a note about a box we do not end up using.
+    """
+    vhost = SERVICES["gateway"][1]
+    for url, extra in (
+            ("http://%s:%d/v1/models" % (host, _own_port("gateway")), {}),
+            ("http://%s:80/v1/models" % host, {"Host": vhost})):
+        req = urllib.request.Request(
+            url, headers={"Authorization": "Bearer probe", **extra})
+        try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status != 404:
-                    return port
+                    return True
         except urllib.error.HTTPError as exc:
-            if exc.code != 404:      # 401 still means the gateway is here
-                return port
-        except Exception:            # noqa: BLE001 - unreachable; try the next
+            if exc.code != 404:
+                return True
+        except Exception:  # noqa: BLE001
             continue
-    return 80
+    return False
 
 
-if HOST:
-    GW = _gateway_port(HOST)
-else:
-    HOST, GW = discover()
-    if not HOST:
-        # Leave something addressable so --help and the web UI still load; the
-        # UI can then ask for an address instead of the process dying at import.
-        HOST, GW = "tiiny", 80
+def connect(host=None, serial=None, rescan=False, quiet=False):
+    """Settle on a box and on how to reach it. Returns where().
+
+    Everything that can go wrong here is worth a sentence rather than a
+    traceback, so the failures raise SystemExit with the thing to do next.
+    """
+    global HOST, PORT_OVERRIDE, SOURCE, PLANE, DEVICE
+    TRANSPORT.clear()
+    DEVICE = {}
+    env_port = os.environ.get("TIINY_PORT")
+    forced_port = int(env_port) if env_port and env_port.isdigit() else None
+    # Set before anything probes, so a candidate is probed on the port the
+    # caller says the gateway is on rather than on the built-in one.
+    PORT_OVERRIDE = forced_port
+
+    def settle(addr, port, source, plane, dev=None):
+        global HOST, PORT_OVERRIDE, SOURCE, PLANE, DEVICE
+        HOST, SOURCE, PLANE = addr, source, plane
+        PORT_OVERRIDE = forced_port or (port if port and port != 80 else None)
+        DEVICE = dev or {}
+        if not DEVICE.get("serial"):
+            # One cheap unauthenticated request, so a result file records which
+            # box it measured even when the address came from the environment
+            # rather than from a scan. Harmless when it does not answer.
+            d = device_json(addr, timeout=1.5) or {}
+            if d.get("serial_number"):
+                DEVICE = {"addr": addr, "plane": plane,
+                          "serial": d.get("serial_number"),
+                          "name": d.get("device_name"),
+                          "transport": d.get("transport")}
+        probe_gateway()
+        return where()
+
+    # TIINY_HOST is what this suite documented before the farm existed, and
+    # people have it exported. It still works, it is just no longer the name.
+    base, port = _split_base(os.environ.get("TIINY_BASE")
+                             or os.environ.get("TIINY_HOST"))
+    if base:
+        var = "TIINY_BASE" if os.environ.get("TIINY_BASE") else "TIINY_HOST"
+        if host and host != base and not quiet:
+            say("  note: %s=%s is being used, not --host %s. "
+                "Unset %s to use the flag." % (var, base, host, var))
+        return settle(base, port, var, "given")
+
+    base, port = _split_base(_farm_device().get("base"))
+    if base:
+        if host and host != base and not quiet:
+            say("  note: %s is being used, not --host %s." % (FARM_DEVICE, host))
+        return settle(base, port, str(FARM_DEVICE), "given")
+
+    if host:
+        addr, port = _split_base(host)
+        if not addr:
+            sys.exit("--host %r is not an address." % host)
+        return settle(addr, port, "--host", "given")
+
+    if not rescan and not serial:
+        saved, port = _split_base(_config().get("host"))
+        if saved and reachable(saved):
+            return settle(saved, port, str(CONFIG), _config().get("plane") or "saved")
+
+    boxes = scan()
+    if serial:
+        boxes = [b for b in boxes if b["serial"] == serial
+                 or b["serial"].endswith(serial)]
+        if not boxes:
+            sys.exit("no Tiiny with serial %r answered. "
+                     "Run without --serial to see what is here." % serial)
+    if len(boxes) > 1:
+        lines = ["", "  More than one Tiiny answered. Pick one:", ""]
+        for b in boxes:
+            lines.append("    %-16s %-5s %-24s %s" % (
+                b["addr"], b["plane"], b["serial"], b["name"] or ""))
+        lines += ["", "    tiiny-bench --serial %s ..." % boxes[0]["serial"],
+                  "    tiiny-bench --host %s ..." % boxes[0]["addr"], ""]
+        sys.exit("\n".join(lines))
+    if boxes:
+        b = boxes[0]
+        save_config(host=b["addr"], plane=b["plane"])
+        return settle(b["addr"], None, "scan", b["plane"], b)
+
+    # Nothing on either plane. On a Mac running the TiinyOS app the proxy
+    # names still work, and they cost one request each, so try them last.
+    for name in PROXY_HOSTS:
+        if reachable(name, timeout=1.5):
+            save_config(host=name, plane="proxy")
+            return settle(name, None, "proxy name", "proxy")
+
+    sys.exit(
+        "No Tiiny found.\n"
+        "  Looked for a USB /30 peer, swept this host's own /24 on :%d, and "
+        "tried %s.\n"
+        "  Give it an address with --host, or set TIINY_BASE." % (
+            DISCO_PORT, ", ".join(PROXY_HOSTS)))
+
+
+def connect_soft(**kw):
+    """connect(), but a failure is reported rather than fatal.
+
+    The web UI has to come up even with no box on the network, because asking
+    for an address is one of the things it is there to do.
+    """
+    try:
+        return connect(**kw), ""
+    except SystemExit as exc:
+        return None, str(exc)
+
+
+def probe_gateway(timeout=3.0):
+    """Settle which transport reaches the gateway before anything is measured.
+
+    The key is deliberately bogus: a 401 proves the gateway is there, and we
+    would rather learn which port serves it here than three tests into a run.
+    """
+    api(gw("/v1/models"), "probe", timeout=timeout)
+    return TRANSPORT.get("gateway")
+
+
+def where():
+    """One dict describing the connection, for the UI and the result file."""
+    mode = TRANSPORT.get("gateway") or "unknown"
+    return {
+        "host": HOST,
+        "source": SOURCE,
+        "plane": PLANE,
+        "serial": DEVICE.get("serial"),
+        "gateway_transport": mode,
+        "gateway_port": 80 if mode == "vhost" else _own_port("gateway"),
+        "gateway_vhost": SERVICES["gateway"][1] if mode == "vhost" else None,
+        "services": dict(TRANSPORT),
+    }
+
+
+def firmware(info):
+    """The two version numbers out of a device_info response.
+
+    TiinyOS and the device service ship on separate version lines and a bug
+    report needs both, so both go in the result file rather than the one the
+    report header happens to show.
+    """
+    if not isinstance(info, dict) or "_error" in info:
+        return {}
+    return {"tiiny_os": info.get("tiiny_os"), "version": info.get("version")}
+
+
+def identify():
+    """What this device says it is. Unauthenticated where it can be, so the
+    web UI can show the user what it found before asking them for anything."""
+    out = {}
+    d = api(mgmt("/api/v1/sys/device_info"), "probe", timeout=5)
+    if "_error" not in d:
+        out = {"name": d.get("device_name"), "model": d.get("device_model_name"),
+               "os": d.get("tiiny_os"), "service": d.get("version"),
+               "ram": d.get("ram"), "storage": d.get("storage"),
+               "serial": d.get("sn")}
+    disco = device_json(HOST, timeout=1.5) or {}
+    if disco:
+        out.setdefault("name", disco.get("device_name"))
+        out["serial"] = disco.get("serial_number") or out.get("serial")
+        out["transport"] = disco.get("transport")
+    return {k: v for k, v in out.items() if v}
 
 # Everything the suite says out loud goes through say(). The CLI prints it;
 # the server hands it a sink as well so the same words stream to the browser.
@@ -234,59 +623,129 @@ CHAT_TYPES = {"Text Generation", "Image-Text-to-Text", "Text-to-Image",
               "Text-to-Speech", "Text Embedding"}
 
 
-def key():
-    """TIINY_KEY if you set it. Otherwise dig it out of TiinyOS on this Mac.
+def _tiinyos_keys():
+    """Every key-shaped string in the TiinyOS app's own storage, most used first.
 
-    The scrape is a convenience for the machine running TiinyOS and nothing
-    more: it reads the app's own local storage, tries each UUID it finds, and
-    keeps the first one the device accepts."""
+    Both file types, because LevelDB writes the newest value to the .log and
+    only later compacts it into a .ldb, so looking at one of them finds a key
+    that is either stale or missing depending on which half you picked. Ranking
+    by how often a UUID appears puts the key the app is actually using in front
+    of the request ids and session ids that share its shape.
+    """
+    home = pathlib.Path.home()
+    files = sorted(glob.glob(str(
+        home / "Library/Application Support/TiinyOS/Local Storage/leveldb/*.ldb")))
+    files += sorted(glob.glob(str(
+        home / "Library/Application Support/TiinyOS/Local Storage/leveldb/*.log")))
+    if not files:
+        return []
+    hits = subprocess.run(
+        ["grep", "-aoh",
+         r"[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}"]
+        + files, capture_output=True, text=True).stdout
+    counts = {}
+    for h in hits.split():
+        h = h.strip()
+        if h:
+            counts[h] = counts.get(h, 0) + 1
+    return sorted(counts, key=lambda c: -counts[c])
+
+
+def key():
+    """TIINY_KEY if you set it. Otherwise the farm's, then the saved one, then
+    whatever TiinyOS on this Mac is using.
+
+    The scrape is last on purpose and is a convenience for the machine running
+    TiinyOS and nothing more: it reads the app's own local storage and keeps the
+    first candidate the device accepts.
+    """
+    global KEY_SOURCE
     env = os.environ.get("TIINY_KEY", "").strip()
     if env:
+        KEY_SOURCE = "TIINY_KEY"
         return env
+    farm = (_farm_device().get("key") or "").strip()
+    if farm:
+        KEY_SOURCE = str(FARM_DEVICE)
+        return farm
     saved = (_config().get("key") or "").strip()
     if saved:
+        KEY_SOURCE = str(CONFIG)
         return saved
-    hits = subprocess.run(
-        ["grep", "-aoh", r"[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}"]
-        + glob.glob(str(pathlib.Path.home() /
-                       "Library/Application Support/TiinyOS/Local Storage/leveldb/*.ldb")),
-        capture_output=True, text=True).stdout
-    for c in dict.fromkeys(h.strip() for h in hits.split() if h.strip()):
-        if "_error" not in api(f"http://{HOST}:{GW}/api/v1/models/running", c):
+    for c in _tiinyos_keys():
+        if "_error" not in api(gw("/api/v1/models/running"), c, timeout=20):
+            KEY_SOURCE = "TiinyOS local storage"
             return c
     sys.exit("No API key. Set TIINY_KEY, paste one into the web UI, "
              "or run this on the Mac running TiinyOS.")
 
 
-def api(url, tok, body=None, timeout=900, method=None):
-    req = urllib.request.Request(
-        url, method=method or ("POST" if body is not None else "GET"),
-        data=json.dumps(body).encode() if body else None,
-        headers={"Authorization": f"Bearer {tok}",
-                 **({"Content-Type": "application/json"} if body else {})})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r)
-    except Exception as e:
-        return {"_error": str(e)[:140]}
+class _StayOnBox(urllib.request.HTTPRedirectHandler):
+    """Follow a redirect back to the address the request was made to.
+
+    nginx on the device answers /api/v1/models with a 301 to the absolute URL
+    http://p8800.api.tiiny/api/v1/models/ - a vhost name that resolves only on
+    a Mac running the TiinyOS app, and resolves there to a proxy that answers
+    502. Left alone, urllib takes that redirect off the box and a plain model
+    listing comes back as a gateway error. So the redirect is followed, but the
+    host and port are put back to the ones we were talking to and the Host
+    header we set is carried along.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = urllib.parse.urlsplit(newurl)
+        old = urllib.parse.urlsplit(req.full_url)
+        if new.netloc and new.netloc != old.netloc:
+            newurl = urllib.parse.urlunsplit(
+                (old.scheme, old.netloc, new.path, new.query, ""))
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def api_raw(url, tok, body=None, timeout=300):
+OPENER = urllib.request.build_opener(_StayOnBox())
+
+
+def _request(target, tok, body, timeout, method, read):
+    """One call to one service, over whichever transport reaches it.
+
+    The service's own port is tried first. A refused connection, and only a
+    refused connection, moves that service onto the port 80 vhost for the rest
+    of the run. An HTTP error still tells us the transport was right, so it is
+    recorded before the error is handed back.
+    """
+    err = None
+    for url, extra, mode in _attempts(target):
+        req = urllib.request.Request(
+            url, method=method or ("POST" if body is not None else "GET"),
+            data=json.dumps(body).encode() if body else None,
+            headers={"Authorization": f"Bearer {tok}", **extra,
+                     **({"Content-Type": "application/json"} if body else {})})
+        try:
+            with OPENER.open(req, timeout=timeout) as r:
+                _mark(target, mode)
+                return r.read() if read else json.load(r)
+        except urllib.error.HTTPError as e:
+            _mark(target, mode)
+            return {"_error": str(e)[:140]}
+        except Exception as e:  # noqa: BLE001
+            err = e
+            if mode == "direct" and _refused(e) and not isinstance(target, str):
+                _mark(target, "vhost")
+                continue
+            break
+    return {"_error": str(err)[:140]}
+
+
+def api(target, tok, body=None, timeout=900, method=None):
+    return _request(target, tok, body, timeout, method, read=False)
+
+
+def api_raw(target, tok, body=None, timeout=300):
     """Same as api() but for endpoints that hand back a file, not JSON."""
-    req = urllib.request.Request(
-        url, method="POST" if body is not None else "GET",
-        data=json.dumps(body).encode() if body else None,
-        headers={"Authorization": f"Bearer {tok}",
-                 **({"Content-Type": "application/json"} if body else {})})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.read()
-    except Exception as e:
-        return {"_error": str(e)[:140]}
+    return _request(target, tok, body, timeout, None, read=True)
 
 
 def telemetry(tok):
-    s = api(f"http://{HOST}/api/v1/sys/status", tok, timeout=20)
+    s = api(mgmt("/api/v1/sys/status"), tok, timeout=20)
     n = (s.get("npus") or [{}])[0]
     cpu = s.get("cpu") or {}
     return {
@@ -302,7 +761,7 @@ def chat(tok, model, prompt, max_tokens, thinking=False):
             "chat_template_kwargs": {"enable_thinking": thinking},
             "messages": [{"role": "user", "content": prompt}]}
     t0 = time.time()
-    v = api(f"http://{HOST}:{GW}/v1/chat/completions", tok, body)
+    v = api(gw("/v1/chat/completions"), tok, body)
     wall = time.time() - t0
     if "_error" in v:
         return {"error": v["_error"], "wall_s": round(wall, 2)}
@@ -325,7 +784,7 @@ def chat(tok, model, prompt, max_tokens, thinking=False):
 def catalog(tok):
     """Everything installed on the box, from the box. There is no hand-kept
     model list in this repo on purpose - it would be wrong within a week."""
-    d = api(f"http://{HOST}:{GW}/api/v1/models", tok, timeout=60)
+    d = api(gw("/api/v1/models/"), tok, timeout=60)
     if "_error" in d:
         sys.exit(f"could not read the model catalog: {d['_error']}")
     out = []
@@ -343,12 +802,12 @@ def catalog(tok):
 
 
 def running(tok):
-    return (api(f"http://{HOST}:{GW}/api/v1/models/running", tok, timeout=30)
+    return (api(gw("/api/v1/models/running"), tok, timeout=30)
             .get("running") or [])
 
 
 def npu_free(tok):
-    s = api(f"http://{HOST}:{GW}/api/v1/models/npu/status", tok, timeout=30)
+    s = api(gw("/api/v1/models/npu/status"), tok, timeout=30)
     return s.get("npu_available"), s.get("npu_total")
 
 
@@ -363,7 +822,7 @@ def load(tok, model, poll_s=420):
     enc = urllib.parse.quote(model, safe="")
     say(f"    loading {model} ...")
     t0 = time.time()
-    api(f"http://{HOST}:{GW}/api/v1/models/{enc}/start", tok, body={}, timeout=poll_s)
+    api(gw(f"/api/v1/models/{enc}/start"), tok, body={}, timeout=poll_s)
     while time.time() - t0 < poll_s:
         if model in running(tok):
             time.sleep(2.0)
@@ -376,14 +835,14 @@ def load(tok, model, poll_s=420):
 
 def unload(tok, model):
     enc = urllib.parse.quote(model, safe="")
-    api(f"http://{HOST}:{GW}/api/v1/models/{enc}/stop", tok, body={}, timeout=180)
+    api(gw(f"/api/v1/models/{enc}/stop"), tok, body={}, timeout=180)
     time.sleep(1.5)
 
 
 def unload_all(tok):
     """Clear the NPU. The device's own app hides this three levels deep inside
     Agents, which is most of the reason this page exists."""
-    return api(f"http://{HOST}:{GW}/api/v1/models/unload_all", tok, body={}, timeout=180)
+    return api(gw("/api/v1/models/unload_all"), tok, body={}, timeout=180)
 
 
 def online(tok):
@@ -393,7 +852,7 @@ def online(tok):
     benchmark that cannot fetch a model it has not got has a dead end in it,
     and "download it, then measure it" is the whole point of closing this loop.
     """
-    d = api(f"http://{HOST}:{GW}/api/v1/models/online_models", tok, timeout=90)
+    d = api(gw("/api/v1/models/online_models"), tok, timeout=90)
     if isinstance(d, dict) and "_error" in d:
         return []
     rows = d if isinstance(d, list) else (d.get("data") or d.get("models") or [])
@@ -416,25 +875,25 @@ def online(tok):
 def download(tok, model):
     """Start a download. Returns at once; watch it with download_progress."""
     enc = urllib.parse.quote(model, safe="")
-    return api(f"http://{HOST}:{GW}/api/v1/models/{enc}/download", tok,
+    return api(gw(f"/api/v1/models/{enc}/download"), tok,
                body={}, timeout=120)
 
 
 def download_progress(tok, model):
     enc = urllib.parse.quote(model, safe="")
-    d = api(f"http://{HOST}:{GW}/api/v1/models/{enc}/get_progress", tok, timeout=30)
+    d = api(gw(f"/api/v1/models/{enc}/get_progress"), tok, timeout=30)
     return {} if "_error" in d else d
 
 
 def delete_model(tok, model):
     enc = urllib.parse.quote(model, safe="")
-    return api(f"http://{HOST}:{GW}/api/v1/models/{enc}", tok,
+    return api(gw(f"/api/v1/models/{enc}"), tok,
                timeout=180, method="DELETE")
 
 
 def storage(tok):
     """Disk on the device."""
-    d = api(f"http://{HOST}:{GW}/api/v1/sys/storage", tok, timeout=30)
+    d = api(gw("/api/v1/sys/storage"), tok, timeout=30)
     return {} if "_error" in d else d
 
 
@@ -555,7 +1014,7 @@ def t_image(tok, model):
     rows = []
     for i, prompt in enumerate(IMAGE_PROMPTS):
         t0 = time.time()
-        raw = api_raw(f"http://{HOST}:{GW}/v1/image/generate", tok,
+        raw = api_raw(gw("/v1/image/generate"), tok,
                       {"model": model, "prompt": prompt, "negative_prompt": "",
                        "width": 512, "height": 512, "seed": 1000 + i, "steps": 8},
                       timeout=300)
@@ -602,7 +1061,7 @@ def t_speech(tok, model):
     rows = []
     for i, text in enumerate(SPEECH_TEXTS):
         t0 = time.time()
-        raw = api_raw(f"http://{HOST}:{GW}/v1/audio/speech", tok,
+        raw = api_raw(gw("/v1/audio/speech"), tok,
                       {"model": model, "input": text, "response_format": "wav"},
                       timeout=300)
         wall = time.time() - t0
@@ -630,7 +1089,7 @@ def t_embed(tok, model):
     for n in (1, 8, 32):
         batch = [FILLER[:180] + f" item {i}" for i in range(n)]
         t0 = time.time()
-        v = api(f"http://{HOST}:{GW}/v1/embeddings", tok,
+        v = api(gw("/v1/embeddings"), tok,
                 {"model": model, "input": batch}, timeout=180)
         wall = time.time() - t0
         if "_error" in v:
@@ -715,15 +1174,23 @@ def selfcheck(tok):
         ok = ok and passed
         say(f"  {'ok  ' if passed else 'FAIL'} {label:<34} {detail}")
 
-    say(f"\n  TiinyBench selfcheck   device {HOST}:{GW}\n")
+    w = where()
+    say(f"\n  TiinyBench {VERSION} selfcheck")
+    say(f"  device   {w['host']}   found by {w['source']}   {w['plane']} plane"
+        + (f"   serial {w['serial']}" if w.get("serial") else ""))
+    say("  gateway  " + (f"port 80 with Host: {w['gateway_vhost']}"
+                         if w["gateway_transport"] == "vhost"
+                         else f"direct on port {w['gateway_port']}")
+        + f"   ({w['gateway_transport']})\n")
 
     t0 = time.time()
-    info = api(f"http://{HOST}/api/v1/sys/device_info", tok, timeout=20)
+    info = api(mgmt("/api/v1/sys/device_info"), tok, timeout=20)
     step("device reachable", "_error" not in info,
          info.get("_error", "") or f"TiinyOS {info.get('tiiny_os', '?')}  "
+                                   f"service {info.get('version', '?')}  "
                                    f"{(time.time()-t0)*1000:.0f}ms")
 
-    cat = api(f"http://{HOST}:{GW}/api/v1/models", tok, timeout=60)
+    cat = api(gw("/api/v1/models/"), tok, timeout=60)
     n = len(cat.get("data") or [])
     step("api key accepted", "_error" not in cat and n > 0,
          cat.get("_error", "") or f"{n} models installed")
@@ -735,21 +1202,35 @@ def selfcheck(tok):
           "nothing loaded - load a model in TiinyOS")
          + (f"   NPU {total - free}/{total}" if total else ""))
 
-    target = None
+    # Any loaded model can prove the transport carries a real inference, and a
+    # box serving embeddings is a box doing real work. Timing one embedding
+    # rather than reporting a failure means this check never asks somebody to
+    # load a chat model just to satisfy it.
+    target = etarget = None
     for m in live:
         meta = next((x for x in (cat.get("data") or []) if x.get("id") == m), {})
-        if meta.get("type") in ("Text Generation", "Image-Text-to-Text"):
+        if not target and meta.get("type") in ("Text Generation", "Image-Text-to-Text"):
             target = m
-            break
+        if not etarget and meta.get("type") == "Text Embedding":
+            etarget = m
     if target:
         r = chat(tok, target, "Reply with the single word: ok", 8)
         step("inference returns", "error" not in r,
              r.get("error", "") or
              f"{target.split('/')[-1]}  {r.get('decode_tok_s', 0):.1f} tok/s  "
              f"{r.get('wall_s', 0):.2f}s")
+    elif etarget:
+        t1 = time.time()
+        v = api(gw("/v1/embeddings"), tok,
+                {"model": etarget, "input": ["selfcheck"]}, timeout=120)
+        dim = len(((v.get("data") or [{}])[0] or {}).get("embedding") or [])
+        step("inference returns", "_error" not in v and dim > 0,
+             v.get("_error", "") or
+             f"{etarget.split('/')[-1]}  1 embedding, dim {dim}  "
+             f"{time.time() - t1:.2f}s  (no chat model loaded)")
     else:
         step("inference returns", False,
-             "no chat model loaded; load one to time a real call")
+             "nothing loaded that this can time; load a model in TiinyOS")
 
     try:
         OUT.mkdir(exist_ok=True)
@@ -784,6 +1265,15 @@ def main():
     p.add_argument("--show", help="print a saved result file")
     p.add_argument("--serve", nargs="?", const=8425, type=int, metavar="PORT",
                    help="run the web app (default port 8425)")
+    p.add_argument("--host", help="the Tiiny's address, instead of finding it. "
+                                 "TIINY_BASE and the farm's device file win over this.")
+    p.add_argument("--serial", help="pick a box by serial when more than one answers")
+    p.add_argument("--rescan", action="store_true",
+                   help="ignore the saved address and look for boxes again")
+    p.add_argument("--where", action="store_true",
+                   help="find the Tiiny, say how it was reached, and stop. "
+                        "Touches nothing on the device.")
+    p.add_argument("--version", action="version", version="tiiny-bench " + VERSION)
     a = p.parse_args()
     OUT.mkdir(exist_ok=True)
 
@@ -795,9 +1285,35 @@ def main():
         out = report.build(OUT, HERE / "report.html")
         print(f"  wrote {out}")
         return 0
+
     if a.serve:
         import serve
-        return serve.run(a.serve)
+        return serve.run(a.serve, host=a.host, serial=a.serial, rescan=a.rescan)
+
+    # Resolving the address is the first thing that happens, and it happens
+    # here rather than at import so that --help and --report still work on a
+    # machine with no Tiiny attached.
+    connect(host=a.host, serial=a.serial, rescan=a.rescan)
+
+    if a.where:
+        w = where()
+        info = api(mgmt("/api/v1/sys/device_info"), "probe", timeout=10)
+        print(f"\n  tiiny-bench {VERSION}")
+        print(f"  address    {w['host']}")
+        print(f"  found by   {w['source']}")
+        print(f"  plane      {w['plane']}")
+        if w.get("serial"):
+            print(f"  serial     {w['serial']}")
+        print("  gateway    " + (
+            f"port 80, Host: {w['gateway_vhost']}" if w["gateway_transport"] == "vhost"
+            else f"direct on port {w['gateway_port']}")
+            + f"   ({w['gateway_transport']})")
+        fw = firmware(info)
+        if fw:
+            print(f"  firmware   TiinyOS {fw.get('tiiny_os')}  "
+                  f"service {fw.get('version')}")
+        print("")
+        return 0
 
     tok = key()
 
@@ -825,10 +1341,18 @@ def main():
         if w not in TESTS:
             p.error(f"unknown test {w!r}; known: {', '.join(TESTS)}")
 
-    info = api(f"http://{HOST}/api/v1/sys/device_info", tok, timeout=20)
+    info = api(mgmt("/api/v1/sys/device_info"), tok, timeout=20)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     rec = {"label": a.label, "stamp": stamp, "build": info.get("tiiny_os"),
-           "host": HOST, "suite_version": 2, "models": []}
+           "host": HOST, "suite_version": 2,
+           "bench_version": VERSION,
+           # Which address, which plane and which transport produced these
+           # numbers. Two runs of the same box over USB and over the port 80
+           # vhost are not the same measurement, and a result that does not say
+           # which one it was cannot be compared with anything later.
+           "connection": where(),
+           "firmware": firmware(info),
+           "models": []}
     path = OUT / f"{stamp}-suite-{a.label}.json"
 
     cat = {m["id"]: m for m in catalog(tok)}
