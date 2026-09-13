@@ -247,6 +247,8 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <div class="sect">Plan</div>
     <button data-p="fit"><span class="ico">◈</span>Can I Run It?</button>
     <button data-p="models"><span class="ico">▣</span>Models</button>
+    <div class="sect">Setup</div>
+    <button data-p="conn"><span class="ico">◎</span>Connection</button>
     <div class="sect">Records</div>
     <button data-p="history"><span class="ico">↻</span>History</button>
     <button data-p="report"><span class="ico">◲</span>Report</button>
@@ -383,6 +385,43 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <p>Read off the device itself. There is no model list kept in this repo, because it would
        be wrong within a week.</p></div></div>
   <div class="tw" id="catalog"><div class="empty">reading the box…</div></div>
+</section>
+
+<!-- ================= CONNECTION ================= -->
+<section class="page" id="p-conn">
+  <div class="head"><div><h2>Connection</h2>
+    <p>TiinyBench finds the box on its own. A stock Tiiny answers on several addresses at once and
+       which ones exist depends on how it is plugged in, so this tries them in order and keeps the
+       first one that replies.</p></div>
+    <div class="right"><button class="ghost" id="credetect">Detect again</button></div></div>
+
+  <div class="grid" id="connstats"></div>
+
+  <div class="grid" style="margin-top:26px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))">
+    <div class="card"><div class="hd">Address</div><div class="bd">
+      <div class="note" style="margin-bottom:10px">Leave this alone unless detection missed. A
+        direct address works too: the LAN IP, the USB address, or an IPv6 literal in brackets.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="txt" id="connhost" placeholder="192.168.1.50" style="flex:1;min-width:170px">
+        <button class="go" id="connsave">Use this</button>
+      </div>
+      <div class="note" id="conncand" style="margin-top:10px"></div>
+      <div class="err" id="connerr" hidden style="margin-top:10px"></div>
+    </div></div>
+
+    <div class="card"><div class="hd">API key <span class="r" id="connkeyr"></span></div><div class="bd">
+      <div class="note" style="margin-bottom:10px">One static key authorises everything on the
+        device, so treat it like a root password. On the Mac running TiinyOS it is read out of the
+        app automatically. Anywhere else, paste it here once.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="txt" id="connkey" type="password" placeholder="paste key" autocomplete="off"
+               style="flex:1;min-width:170px">
+        <button class="go" id="connkeysave">Save key</button>
+      </div>
+      <div class="note" id="connkeyn" style="margin-top:10px"></div>
+      <div class="err" id="connkeyerr" hidden style="margin-top:10px"></div>
+    </div></div>
+  </div>
 </section>
 
 <!-- ================= HISTORY ================= -->
@@ -885,8 +924,53 @@ $('method').innerHTML=[
     +'<p style="color:var(--steel);font-size:12.5px;text-wrap:pretty">'+esc(m[1])+'</p></div></div>';
 }).join('');
 
+/* ---- connection ------------------------------------------------------- */
+function connStat(k,v){
+  return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v||'-')+'</div></div>';
+}
+function conn(){
+  return j('/api/device').then(function(d){
+    var dev = d.device || {};
+    $('connstats').innerHTML =
+        connStat('device', dev.name || 'found, unnamed')
+      + connStat('reached at', d.host + (d.port===80 ? '' : ':'+d.port))
+      + connStat('firmware', dev.os ? 'TiinyOS '+dev.os : '-')
+      + connStat('memory', dev.ram || '-')
+      + connStat('storage', dev.storage || '-')
+      + connStat('api key', d.key_set ? (d.key_source==='env'?'from TIINY_KEY':'saved') : 'not set');
+    $('connhost').value = '';
+    $('connhost').placeholder = d.host;
+    $('conncand').textContent = 'tried in order: ' + (d.candidates||[]).join(', ');
+    $('connkeyr').textContent = d.key_set ? d.key_hint : 'needed';
+    $('connkeyn').textContent = d.key_set
+      ? (d.key_source==='env' ? 'Using TIINY_KEY from the environment; it wins over anything saved.'
+                              : 'Saved in ' + d.config + ', readable only by you.')
+      : 'No key yet. The benchmark cannot talk to the device without one.';
+    return d;
+  });
+}
+function connPost(body, errEl){
+  $(errEl).hidden = true;
+  return j('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},
+                          body:JSON.stringify(body)}).then(function(r){
+    if(r.error){ $(errEl).textContent = r.error; $(errEl).hidden = false; return null; }
+    return conn().then(function(){ return catalog(); });
+  });
+}
+$('credetect').addEventListener('click', function(){ connPost({rediscover:true},'connerr'); });
+$('connsave').addEventListener('click', function(){
+  var h = $('connhost').value.trim();
+  if(h) connPost({host:h},'connerr');
+});
+$('connkeysave').addEventListener('click', function(){
+  var k = $('connkey').value.trim();
+  if(!k) return;
+  connPost({key:k},'connkeyerr').then(function(ok){ if(ok) $('connkey').value=''; });
+});
+
 /* ---- go ------------------------------------------------------------- */
 catalog().then(function(){ return board(); }).then(function(){
+  conn();
   history_();
   idlePoll();
   j('/api/state').then(function(d){ phase(d); if(d.running){ connect(); go('live'); } });

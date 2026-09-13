@@ -34,7 +34,117 @@ import os
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
 
-HOST = os.environ.get("TIINY_HOST", "tiiny.local")
+# Where a saved device and key live, so discovery runs once rather than on
+# every invocation. The web UI writes this too.
+CONFIG = pathlib.Path(
+    os.environ.get("XDG_CONFIG_HOME") or (pathlib.Path.home() / ".config")
+) / "tiiny-bench.json"
+
+# A stock Tiiny answers on several addresses at once and which ones exist
+# depends on how it is attached. In rough order of how fast they resolve:
+#
+#   tiiny, *.api.tiiny   the TiinyOS app writes /etc/resolver entries pointing
+#                        these at a local proxy, so they work on any Mac with
+#                        the app, whatever the device's actual address is
+#   172.17.7.177         the USB link is a fixed /30, so this never changes
+#   tiiny.local          mDNS, for machines without the app
+#
+# The old default here was tiiny.local, which resolves on nothing we tested.
+CANDIDATES = ("tiiny", "openai.api.tiiny", "172.17.7.177", "tiiny.local")
+
+
+def _config():
+    try:
+        return json.loads(CONFIG.read_text())
+    except Exception:  # noqa: BLE001 - absent or unreadable is just "nothing saved"
+        return {}
+
+
+def save_config(**kw):
+    """Remember a host or a key. Written 0600: the key is a root credential."""
+    cfg = _config()
+    cfg.update({k: v for k, v in kw.items() if v is not None})
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG.write_text(json.dumps(cfg, indent=1))
+    try:
+        CONFIG.chmod(0o600)
+    except OSError:
+        pass
+    return cfg
+
+
+def reachable(host, timeout=1.5):
+    """(host, port) if the AI gateway answers here, else None.
+
+    401 counts as found: it means the gateway is listening and wants a key,
+    which is exactly the thing we are looking for. Only 404 and a dead socket
+    mean "not the device".
+    """
+    for port in (80, 8800):
+        url = "http://%s:%d/v1/models" % (host, port)
+        try:
+            req = urllib.request.Request(url, headers={"Authorization": "Bearer probe"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                if r.status != 404:
+                    return host, port
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                return host, port
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def discover(timeout=1.5):
+    """First address that answers. Saved, so the next run skips straight to it."""
+    tried = []
+    saved = _config().get("host")
+    for host in ([saved] if saved else []) + list(CANDIDATES):
+        if not host or host in tried:
+            continue
+        tried.append(host)
+        hit = reachable(host, timeout)
+        if hit:
+            if host != saved:
+                save_config(host=host)
+            return hit
+    return None, None
+
+
+def identify(host, port=80, timeout=3.0):
+    """What this device says it is. Unauthenticated, so it works before a key
+    is entered - which is the point, since the UI wants to show the user what
+    it found before asking them for anything.
+
+    /api/v1/sys/device_info is served on the gateway port, so it comes back
+    through the TiinyOS proxy hostnames as well as a direct address. The 39218
+    discovery endpoint carries the serial but only answers on a real address,
+    so it is a bonus rather than the source.
+    """
+    out = {}
+    try:
+        with urllib.request.urlopen(
+                "http://%s:%d/api/v1/sys/device_info" % (host, port), timeout=timeout) as r:
+            d = json.load(r)
+        out = {"name": d.get("device_name"), "model": d.get("device_model_name"),
+               "os": d.get("tiiny_os"), "ram": d.get("ram"),
+               "storage": d.get("storage"), "serial": d.get("sn")}
+    except Exception:  # noqa: BLE001
+        pass
+    if not out.get("serial"):
+        try:
+            with urllib.request.urlopen(
+                    "http://%s:39218/device.json" % host, timeout=1.5) as r:
+                d = json.load(r)
+            out.setdefault("name", d.get("device_name"))
+            out["serial"] = d.get("serial_number")
+            out["transport"] = d.get("transport")
+        except Exception:  # noqa: BLE001
+            pass
+    return {k: v for k, v in out.items() if v}
+
+
+HOST = os.environ.get("TIINY_HOST", "").strip()
 def _gateway_port(host, timeout=2.0):
     """Which port serves the AI gateway on this device.
 
@@ -65,7 +175,14 @@ def _gateway_port(host, timeout=2.0):
     return 80
 
 
-GW = _gateway_port(HOST)
+if HOST:
+    GW = _gateway_port(HOST)
+else:
+    HOST, GW = discover()
+    if not HOST:
+        # Leave something addressable so --help and the web UI still load; the
+        # UI can then ask for an address instead of the process dying at import.
+        HOST, GW = "tiiny", 80
 
 # Everything the suite says out loud goes through say(). The CLI prints it;
 # the server hands it a sink as well so the same words stream to the browser.
@@ -126,6 +243,9 @@ def key():
     env = os.environ.get("TIINY_KEY", "").strip()
     if env:
         return env
+    saved = (_config().get("key") or "").strip()
+    if saved:
+        return saved
     hits = subprocess.run(
         ["grep", "-aoh", r"[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}"]
         + glob.glob(str(pathlib.Path.home() /
@@ -134,7 +254,8 @@ def key():
     for c in dict.fromkeys(h.strip() for h in hits.split() if h.strip()):
         if "_error" not in api(f"http://{HOST}:{GW}/api/v1/models/running", c):
             return c
-    sys.exit("No API key. Set TIINY_KEY, or run this on the Mac running TiinyOS.")
+    sys.exit("No API key. Set TIINY_KEY, paste one into the web UI, "
+             "or run this on the Mac running TiinyOS.")
 
 
 def api(url, tok, body=None, timeout=900, method=None):

@@ -443,6 +443,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._file(r, "text/html; charset=utf-8")
         if p == "/api/state":
             return self._json(S.snapshot())
+        if p == "/api/device":
+            # Everything the settings panel needs to describe the connection,
+            # and nothing that would leak the key back out to the page.
+            key, how = "", "none"
+            try:
+                k = bench.key()
+                key, how = k, "env" if os.environ.get("TIINY_KEY") else "saved"
+            except SystemExit:
+                pass
+            return self._json({
+                "host": bench.HOST, "port": bench.GW,
+                "candidates": list(bench.CANDIDATES),
+                "device": bench.identify(bench.HOST, bench.GW),
+                "key_set": bool(key),
+                "key_hint": (key[:4] + "\u2026" + key[-4:]) if key else "",
+                "key_source": how,
+                "config": str(bench.CONFIG),
+            })
         if p == "/api/catalog":
             try:
                 tok = bench.key()
@@ -539,6 +557,34 @@ class Handler(BaseHTTPRequestHandler):
             S.thread.start()
             return self._json({"ok": True, "label": label,
                                "models": len(models), "tests": tests})
+        if u.path == "/api/device":
+            host = (body.get("host") or "").strip()
+            newkey = (body.get("key") or "").strip()
+            if host:
+                hit = bench.reachable(host)
+                if not hit:
+                    return self._json(
+                        {"error": f"nothing answering at {host}. The gateway should "
+                                  f"return 401 on /v1/models; check the address."}, 400)
+                bench.HOST, bench.GW = hit
+                bench.save_config(host=bench.HOST)
+            elif body.get("rediscover"):
+                h, g = bench.discover()
+                if not h:
+                    return self._json(
+                        {"error": "no Tiiny found. Tried: "
+                                  + ", ".join(bench.CANDIDATES)}, 404)
+                bench.HOST, bench.GW = h, g
+            if newkey:
+                # Check it against the device before saving, so a typo is caught
+                # here rather than surfacing as a confusing failure mid-run.
+                probe = bench.api(f"http://{bench.HOST}:{bench.GW}/api/v1/models/running",
+                                  newkey)
+                if "_error" in probe:
+                    return self._json({"error": "the device rejected that key"}, 400)
+                bench.save_config(key=newkey)
+            return self._json({"ok": True, "host": bench.HOST, "port": bench.GW,
+                               "device": bench.identify(bench.HOST, bench.GW)})
         if u.path == "/api/stop":
             # Cooperative: the current model finishes and is saved, then the
             # sweep stops. Killing mid-request would throw away a measurement
