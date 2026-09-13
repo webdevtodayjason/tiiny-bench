@@ -234,6 +234,19 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   .navlist .sect{display:none}
   .navlist button{white-space:nowrap}
 }
+
+/* ---- confirm dialog -------------------------------------------------- */
+.scrim{position:fixed;inset:0;background:#0a0c0dcc;backdrop-filter:blur(2px);
+  display:grid;place-items:center;z-index:60;padding:24px}
+.scrim[hidden]{display:none}
+.modal{background:var(--s1);border:1px solid var(--line2);border-radius:9px;
+  max-width:440px;width:100%;padding:22px 24px;box-shadow:0 18px 50px #0009}
+.modal h4{margin:0 0 8px;font-size:15px;letter-spacing:-.02em}
+.modal p{margin:0;color:var(--steel);font-size:12.5px;line-height:1.6;text-wrap:pretty}
+.modal .what{margin:12px 0 0;padding:9px 11px;background:var(--ground);
+  border:1px solid var(--line);border-radius:6px;font-size:12px;word-break:break-all;
+  color:var(--ink)}
+.modal .acts{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
 </style>
 
 <nav>
@@ -469,7 +482,42 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 </section>
 </main>
 
+<div class="scrim" id="scrim" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mdt">
+    <h4 id="mdt">Are you sure?</h4>
+    <p id="mdb"></p>
+    <div class="what" id="mdw" hidden></div>
+    <div class="acts">
+      <button class="ghost" id="mdno">Cancel</button>
+      <button class="go" id="mdyes">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
+
+/* ---- confirm dialog -------------------------------------------------- */
+var _ask = null;
+function ask(title, body, what, yes, danger){
+  $('mdt').textContent = title;
+  $('mdb').textContent = body;
+  $('mdw').textContent = what || '';
+  $('mdw').hidden = !what;
+  $('mdyes').textContent = yes || 'Confirm';
+  $('mdyes').className = danger ? 'ghost danger' : 'go';
+  $('scrim').hidden = false;
+  $('mdyes').focus();
+  return new Promise(function(res){ _ask = res; });
+}
+function askClose(v){ $('scrim').hidden = true; if(_ask){ var f=_ask; _ask=null; f(v); } }
+$('mdno').addEventListener('click', function(){ askClose(false); });
+$('mdyes').addEventListener('click', function(){ askClose(true); });
+$('scrim').addEventListener('click', function(e){ if(e.target===$('scrim')) askClose(false); });
+document.addEventListener('keydown', function(e){
+  if($('scrim').hidden) return;
+  if(e.key==='Escape') askClose(false);
+  if(e.key==='Enter') askClose(true);
+});
 (function(){
 "use strict";
 var $ = function(id){ return document.getElementById(id); };
@@ -786,13 +834,20 @@ document.addEventListener('click', function(e){
   var b=e.target.closest('button[data-act]');
   if(!b) return;
   var act=b.getAttribute('data-act'), mid=b.getAttribute('data-mid');
-  if(act==='delete' && !confirm('Delete '+mid+' from the device? The files go too.')) return;
-  b.disabled=true;
-  mact(act,mid);
+  if(act!=='delete'){ b.disabled=true; mact(act,mid); return; }
+  ask('Delete this model?',
+      'The files are removed from the device. You can download it again from the '
+      + 'catalogue below whenever you want it back, so this costs disk and time, '
+      + 'not the model.',
+      mid, 'Delete', true)
+    .then(function(ok){ if(ok){ b.disabled=true; mact('delete',mid); } });
 });
 $('unloadall').addEventListener('click', function(){
-  if(!confirm('Unload every model? Anything mid-request will fail.')) return;
-  mact('unload_all','');
+  ask('Unload every model?',
+      'Nothing is deleted. Anything mid-request will fail, and each model has to '
+      + 'be loaded again before it will answer.',
+      '', 'Unload all', true)
+    .then(function(ok){ if(ok) mact('unload_all',''); });
 });
 
 function history_(){
