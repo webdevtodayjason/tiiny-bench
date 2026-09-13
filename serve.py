@@ -26,6 +26,10 @@ import bench  # the engine, imported under a stable name by run()
 HERE = pathlib.Path(__file__).resolve().parent
 
 
+# Model operations that outlive a request: model id -> what is happening.
+MGMT = {}
+
+
 class Bus:
     """Fan-out to every open browser. Bounded per subscriber: a tab that stops
     reading must not be able to grow this without limit."""
@@ -461,6 +465,33 @@ class Handler(BaseHTTPRequestHandler):
                 "key_source": how,
                 "config": str(bench.CONFIG),
             })
+        if p == "/api/manage":
+            try:
+                tok = bench.key()
+            except SystemExit as e:
+                return self._json({"error": str(e)}, 400)
+            free, total = bench.npu_free(tok)
+            st = bench.storage(tok)
+            return self._json({
+                "installed": bench.catalog(tok),
+                "online": bench.online(tok),
+                "running": bench.running(tok),
+                "npu": {"free": free, "total": total},
+                "storage": {"total": st.get("total_bytes"),
+                            "used": st.get("used_bytes"),
+                            "free": st.get("remaining_bytes")},
+                "telemetry": bench.telemetry(tok),
+                "busy": dict(MGMT),
+            })
+        if p == "/api/manage/progress":
+            mid = urllib.parse.parse_qs(u.query).get("model", [""])[0]
+            if not mid:
+                return self._json({"error": "which model?"}, 400)
+            try:
+                tok = bench.key()
+            except SystemExit as e:
+                return self._json({"error": str(e)}, 400)
+            return self._json(bench.download_progress(tok, mid))
         if p == "/api/catalog":
             try:
                 tok = bench.key()
@@ -585,6 +616,51 @@ class Handler(BaseHTTPRequestHandler):
                 bench.save_config(key=newkey)
             return self._json({"ok": True, "host": bench.HOST, "port": bench.GW,
                                "device": bench.identify(bench.HOST, bench.GW)})
+        if u.path == "/api/manage":
+            if S.running:
+                return self._json(
+                    {"error": "a benchmark is running; loading a model now would "
+                              "change what it is measuring"}, 409)
+            action = (body.get("action") or "").strip()
+            mid = (body.get("model") or "").strip()
+            try:
+                tok = bench.key()
+            except SystemExit as e:
+                return self._json({"error": str(e)}, 400)
+            if action == "unload_all":
+                bench.unload_all(tok)
+                return self._json({"ok": True})
+            if not mid:
+                return self._json({"error": "which model?"}, 400)
+            if action == "unload":
+                bench.unload(tok, mid)
+                return self._json({"ok": True})
+            if action == "delete":
+                r = bench.delete_model(tok, mid)
+                if isinstance(r, dict) and "_error" in r:
+                    return self._json({"error": r["_error"]}, 400)
+                return self._json({"ok": True})
+            if action == "download":
+                r = bench.download(tok, mid)
+                if isinstance(r, dict) and "_error" in r:
+                    return self._json({"error": r["_error"]}, 400)
+                MGMT[mid] = "downloading"
+                return self._json({"ok": True, "watch": True})
+            if action == "load":
+                # Loading a 35B model takes minutes. Do it on a thread and let
+                # the page poll, rather than holding a request open that long.
+                if mid in MGMT:
+                    return self._json({"error": f"already {MGMT[mid]}"}, 409)
+                MGMT[mid] = "loading"
+
+                def _load(m=mid, t=tok):
+                    try:
+                        bench.load(t, m)
+                    finally:
+                        MGMT.pop(m, None)
+                threading.Thread(target=_load, daemon=True).start()
+                return self._json({"ok": True, "watch": True})
+            return self._json({"error": f"unknown action {action!r}"}, 400)
         if u.path == "/api/stop":
             # Cooperative: the current model finishes and is saved, then the
             # sweep stops. Killing mid-request would throw away a measurement

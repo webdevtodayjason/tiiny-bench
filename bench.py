@@ -332,7 +332,7 @@ def catalog(tok):
     for m in d.get("data", []):
         row = {k: m.get(k) for k in
                ("id", "display_name", "params", "type", "npu_usage",
-                "total_size", "thinking", "version")}
+                "total_size", "thinking", "version", "status")}
         # At least one model ships its params field with a trailing newline,
         # which turns any table built from this into a mess.
         for k, v in row.items():
@@ -378,6 +378,64 @@ def unload(tok, model):
     enc = urllib.parse.quote(model, safe="")
     api(f"http://{HOST}:{GW}/api/v1/models/{enc}/stop", tok, body={}, timeout=180)
     time.sleep(1.5)
+
+
+def unload_all(tok):
+    """Clear the NPU. The device's own app hides this three levels deep inside
+    Agents, which is most of the reason this page exists."""
+    return api(f"http://{HOST}:{GW}/api/v1/models/unload_all", tok, body={}, timeout=180)
+
+
+def online(tok):
+    """The vendor catalogue: everything downloadable, installed or not.
+
+    Distinct from catalog(), which is only what is already on the box. A
+    benchmark that cannot fetch a model it has not got has a dead end in it,
+    and "download it, then measure it" is the whole point of closing this loop.
+    """
+    d = api(f"http://{HOST}:{GW}/api/v1/models/online_models", tok, timeout=90)
+    if isinstance(d, dict) and "_error" in d:
+        return []
+    rows = d if isinstance(d, list) else (d.get("data") or d.get("models") or [])
+    out = []
+    for m in rows:
+        if not isinstance(m, dict):
+            continue
+        out.append({
+            "id": m.get("model_id") or m.get("fullname") or m.get("id"),
+            "name": m.get("name") or m.get("model_id"),
+            "type": " ".join(str(m.get("type") or "").split()),
+            "params": " ".join(str(m.get("params") or "").split()),
+            "npu_usage": m.get("npu_usage"),
+            "status": m.get("status"),
+            "progress": m.get("progress"),
+        })
+    return [m for m in out if m["id"]]
+
+
+def download(tok, model):
+    """Start a download. Returns at once; watch it with download_progress."""
+    enc = urllib.parse.quote(model, safe="")
+    return api(f"http://{HOST}:{GW}/api/v1/models/{enc}/download", tok,
+               body={}, timeout=120)
+
+
+def download_progress(tok, model):
+    enc = urllib.parse.quote(model, safe="")
+    d = api(f"http://{HOST}:{GW}/api/v1/models/{enc}/get_progress", tok, timeout=30)
+    return {} if "_error" in d else d
+
+
+def delete_model(tok, model):
+    enc = urllib.parse.quote(model, safe="")
+    return api(f"http://{HOST}:{GW}/api/v1/models/{enc}", tok,
+               timeout=180, method="DELETE")
+
+
+def storage(tok):
+    """Disk on the device."""
+    d = api(f"http://{HOST}:{GW}/api/v1/sys/storage", tok, timeout=30)
+    return {} if "_error" in d else d
 
 
 # ---------------------------------------------------------------- tests

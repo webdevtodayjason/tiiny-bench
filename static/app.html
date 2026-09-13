@@ -54,6 +54,8 @@ nav{
 .navlist .sect{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);padding:16px 11px 6px}
 .navfoot{padding:13px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--dim)}
+.navfoot .row a{color:var(--cool);text-decoration:none}
+.navfoot .row a:hover{text-decoration:underline}
 .navfoot .row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
 .navfoot b{color:var(--steel);font-weight:400}
 .navfoot img{height:12px;opacity:.55;display:block}
@@ -257,6 +259,8 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   <div class="navfoot">
     <div class="row"><span>device</span><b id="host">…</b></div>
     <div class="row"><span>measured on</span><img src="/assets/tiiny-logo.svg" alt="Tiiny"></div>
+    <div class="row"><span>api docs</span><a href="https://github.com/webdevtodayjason/tiiny-sdk-docs"
+      target="_blank" rel="noopener">tiiny-sdk-docs</a></div>
   </div>
 </nav>
 
@@ -381,10 +385,25 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 
 <!-- ================= MODELS ================= -->
 <section class="page" id="p-models">
-  <div class="head"><div><h2>Models on this box</h2>
-    <p>Read off the device itself. There is no model list kept in this repo, because it would
-       be wrong within a week.</p></div></div>
-  <div class="tw" id="catalog"><div class="empty">reading the box…</div></div>
+  <div class="head"><div><h2>Models</h2>
+    <p>Load, unload and download without leaving the page. Read off the device itself, so there is
+       no model list kept in this repo that would be wrong within a week.</p></div>
+    <div class="right"><button class="ghost danger" id="unloadall">Unload all</button></div></div>
+
+  <div class="grid" id="mstats"></div>
+  <div class="err" id="mgerr" hidden style="margin-top:14px"></div>
+
+  <div style="margin-top:24px">
+    <h3>On this box</h3>
+    <div class="tw" id="minstalled"><div class="empty">reading the box…</div></div>
+  </div>
+
+  <div style="margin-top:26px">
+    <h3>Available to download</h3>
+    <p class="note" style="margin:-4px 0 10px">Everything the vendor catalogue offers that is not
+       here yet. A benchmark that cannot fetch a model it has not got has a dead end in it.</p>
+    <div class="tw" id="mavail"><div class="empty">—</div></div>
+  </div>
 </section>
 
 <!-- ================= CONNECTION ================= -->
@@ -670,20 +689,112 @@ $('fitgrid').addEventListener('click', function(e){
 $('fitreset').addEventListener('click', function(){ S.fit=new Set(S.live); fit(); });
 
 /* ---- models & history ----------------------------------------------- */
-function models(){
-  if(!S.cat.length) return catalog().then(models);
-  $('catalog').innerHTML='<table><thead><tr><th>model</th><th class="num">params</th>'
-    +'<th class="num">size</th><th class="num">NPU</th><th>type</th><th></th></tr></thead><tbody>'
-    +S.cat.map(function(m){
-      return '<tr><td class="mname">'+esc(m.id)+'</td>'
-      +'<td class="num">'+esc(m.params||'—')+'</td>'
-      +'<td class="num">'+(((m.total_size||0)/1e9).toFixed(1))+' GB</td>'
-      +'<td class="num">'+esc(m.npu_usage||'—')+'</td>'
-      +'<td style="color:var(--steel)">'+esc(m.type||'—')+'</td>'
-      +'<td>'+(S.live.indexOf(m.id)>=0?'<span class="pill live">loaded</span>':'')
-      +(CHAT[m.type]?'':' <span class="pill">not measurable</span>')+'</td></tr>';
-    }).join('')+'</tbody></table>';
+function mbtn(act,mid,label,cls){
+  return '<button class="ghost '+(cls||'')+'" data-act="'+act+'" data-mid="'+esc(mid)+'">'+label+'</button>';
 }
+function mgStat(){
+  var d=S.mg; if(!d) return;
+  var t=d.telemetry||{}, st=d.storage||{}, npu=d.npu||{};
+  var used=(npu.total||100)-(npu.free||0);
+  $('mstats').innerHTML =
+    stat('&#9672;', used+'<small>/'+(npu.total||100)+' units</small>', 'NPU budget in use',
+         (npu.free||0)+' free for another model') +
+    stat('&#9650;', (t.npu_util_pct==null?'&mdash;':t.npu_util_pct.toFixed(0)+'<small>%</small>'),
+         'NPU utilisation', 'right now, not averaged') +
+    stat('&#9636;', (d.running||[]).length+'<small> loaded</small>', 'models resident',
+         (d.installed||[]).length+' on disk, '+(d.online||[]).length+' in the catalogue') +
+    stat('&#9638;', (st.free==null?'&mdash;':(st.free/1e9).toFixed(0)+'<small>GB</small>'), 'disk free',
+         st.total? (st.used/1e9).toFixed(0)+' GB of '+(st.total/1e9).toFixed(0)+' GB used':'');
+}
+function models(){
+  return j('/api/manage').then(function(d){
+    if(d.error){ $('mgerr').textContent=d.error; $('mgerr').hidden=false; return; }
+    $('mgerr').hidden=true;
+    S.mg=d; S.live=d.running||[];
+    mgStat();
+    var busy=d.busy||{};
+    $('minstalled').innerHTML='<table><thead><tr><th>model</th><th class="num">params</th>'
+      +'<th class="num">size</th><th class="num">NPU</th><th>type</th><th></th><th></th>'
+      +'</tr></thead><tbody>'
+      +(d.installed||[]).map(function(m){
+        var on=(d.running||[]).indexOf(m.id)>=0, b=busy[m.id];
+        return '<tr><td class="mname">'+esc(m.id)+'</td>'
+        +'<td class="num">'+esc(m.params||'-')+'</td>'
+        +'<td class="num">'+(((m.total_size||0)/1e9).toFixed(1))+' GB</td>'
+        +'<td class="num">'+esc(m.npu_usage==null?'-':m.npu_usage)+'</td>'
+        +'<td style="color:var(--steel)">'+esc(m.type||'-')+'</td>'
+        +'<td>'+(on?'<span class="pill live">loaded</span>':'')
+               +(CHAT[m.type]?'':' <span class="pill">not measurable</span>')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'
+        +(b? '<span class="pill">'+esc(b)+'&hellip;</span>'
+           : (on? mbtn('unload',m.id,'Unload') : mbtn('load',m.id,'Load'))
+             +' '+mbtn('delete',m.id,'Delete','danger'))
+        +'</td></tr>';
+      }).join('')+'</tbody></table>';
+
+    var avail=(d.online||[]).filter(function(m){ return m.status==='not_downloaded'; });
+    $('mavail').innerHTML= avail.length? '<table><thead><tr><th>model</th>'
+      +'<th class="num">params</th><th class="num">NPU</th><th>type</th><th></th>'
+      +'</tr></thead><tbody>'
+      +avail.map(function(m){
+        var b=busy[m.id];
+        return '<tr><td class="mname">'+esc(m.id)+'</td>'
+        +'<td class="num">'+esc(m.params||'-')+'</td>'
+        +'<td class="num">'+esc(m.npu_usage==null?'-':m.npu_usage)+'</td>'
+        +'<td style="color:var(--steel)">'+esc(m.type||'-')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap" data-dl="'+esc(m.id)+'">'
+        +(b? '<span class="pill">'+esc(b)+'&hellip;</span>' : mbtn('download',m.id,'Download'))
+        +'</td></tr>';
+      }).join('')+'</tbody></table>'
+      : '<div class="empty">everything in the catalogue is already here</div>';
+  });
+}
+function mact(act,mid){
+  $('mgerr').hidden=true;
+  return j('/api/manage',{method:'POST',headers:{'Content-Type':'application/json'},
+                          body:JSON.stringify({action:act,model:mid})})
+    .then(function(r){
+      if(r.error){ $('mgerr').textContent=r.error; $('mgerr').hidden=false; models(); return; }
+      models();
+      if(r.watch) mwatch(mid,act);
+    });
+}
+function mwatch(mid,act){
+  /* Loading a 35B model and downloading a 15 GB one both take minutes, so the
+     page polls rather than holding a request open that long. */
+  var tries=0;
+  (function tick(){
+    if(++tries>900) return;
+    setTimeout(function(){
+      if(act==='download'){
+        j('/api/manage/progress?model='+encodeURIComponent(mid)).then(function(pr){
+          var cell=document.querySelector('[data-dl="'+mid+'"]');
+          if(cell && pr && pr.status==='downloading')
+            cell.innerHTML='<span class="pill">'+Number(pr.progress||0).toFixed(0)+'%</span>';
+          if(pr && (pr.status==='downloaded'||pr.status==='error')){ models(); return; }
+          tick();
+        });
+      } else {
+        models().then(function(){
+          if(S.mg && S.mg.busy && S.mg.busy[mid]) tick();
+        });
+      }
+    }, 3000);
+  })();
+}
+document.addEventListener('click', function(e){
+  var b=e.target.closest('button[data-act]');
+  if(!b) return;
+  var act=b.getAttribute('data-act'), mid=b.getAttribute('data-mid');
+  if(act==='delete' && !confirm('Delete '+mid+' from the device? The files go too.')) return;
+  b.disabled=true;
+  mact(act,mid);
+});
+$('unloadall').addEventListener('click', function(){
+  if(!confirm('Unload every model? Anything mid-request will fail.')) return;
+  mact('unload_all','');
+});
+
 function history_(){
   j('/api/runs').then(function(d){
     var rs=d.runs||[]; S.runs=rs.length; S.lastStamp=rs[0]&&rs[0].stamp;
