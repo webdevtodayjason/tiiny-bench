@@ -1,0 +1,316 @@
+{
+  "label": "full-sweep-15sep",
+  "stamp": "20260915-064459",
+  "build": "0.1.34",
+  "host": "tiiny",
+  "suite_version": 2,
+  "models": [
+    {
+      "model": "deepreinforce-ai/Ornith-1.0-35B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 50,
+      "total_size": 18041197148,
+      "elapsed_s": 237.8,
+      "npu_mem_total_mb": 4701,
+      "results": {
+        "prefill": [
+          {
+            "wall_s": 0.946,
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 136.14,
+            "decode_tok_s": 46.89,
+            "prefill_ms": 528.9,
+            "ttft_s": 0.55,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 1.137,
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 395.33,
+            "decode_tok_s": 46.35,
+            "prefill_ms": 839.8,
+            "ttft_s": 0.861,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 2.433,
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 708.53,
+            "decode_tok_s": 44.94,
+            "prefill_ms": 2128.3,
+            "ttft_s": 2.151,
+            "cached_tokens": 72
+          },
+          {
+            "wall_s": 6.934,
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 743.79,
+            "decode_tok_s": 43.42,
+            "prefill_ms": 6641.6,
+            "ttft_s": 6.665,
+            "cached_tokens": 1320
+          }
+        ],
+        "sustained": {
+          "run": {
+            "wall_s": 65.15,
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 80.71,
+            "decode_tok_s": 23.31,
+            "prefill_ms": 557.5,
+            "ttft_s": 0.6,
+            "cached_tokens": 0
+          },
+          "telemetry_before": {
+            "npu_util_pct": 38.22,
+            "npu_mem_used_mb": 6601,
+            "npu_mem_total_mb": 8957,
+            "cpu_total_pct": 5.5
+          },
+          "telemetry_after": {
+            "npu_util_pct": 49.21,
+            "npu_mem_used_mb": 1544,
+            "npu_mem_total_mb": 10583,
+            "cpu_total_pct": 31.3
+          },
+          "during": {
+            "samples": 54,
+            "npu_util_peak": 97.72,
+            "npu_util_median": 42.7,
+            "npu_mem_peak_mb": 10897,
+            "npu_mem_total_mb": 8957
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 21.24,
+            "per_stream_tok_s": 23.55,
+            "wall_s": 7.53,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 21.87,
+            "per_stream_tok_s": 23.84,
+            "wall_s": 14.63,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 21.75,
+            "per_stream_tok_s": 23.54,
+            "wall_s": 29.42,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 21.92,
+            "per_stream_tok_s": 23.54,
+            "wall_s": 58.4,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "wall_s": 24.947,
+            "prompt_tokens": 45,
+            "out_tokens": 565,
+            "prefill_tok_s": 93.2,
+            "decode_tok_s": 23.38,
+            "prefill_ms": 482.9,
+            "ttft_s": 0.526,
+            "cached_tokens": 0
+          },
+          "on": {
+            "wall_s": 25.915,
+            "prompt_tokens": 43,
+            "out_tokens": 598,
+            "prefill_tok_s": 11.09,
+            "decode_tok_s": 23.48,
+            "prefill_ms": 180.4,
+            "ttft_s": 0.223,
+            "cached_tokens": 41
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B-turbo",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 55,
+      "total_size": 17865442756,
+      "elapsed_s": 7105.7,
+      "npu_mem_total_mb": 10445,
+      "results": {
+        "prefill": [
+          {
+            "wall_s": 0.915,
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 127.17,
+            "decode_tok_s": 22.73,
+            "prefill_ms": 566.2,
+            "ttft_s": 0.61,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 1.07,
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 357.61,
+            "decode_tok_s": 24.07,
+            "prefill_ms": 928.4,
+            "ttft_s": 0.97,
+            "cached_tokens": 0
+          },
+          {
+            "wall_s": 2.414,
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 665.96,
+            "decode_tok_s": 22.2,
+            "prefill_ms": 2264.4,
+            "ttft_s": 2.309,
+            "cached_tokens": 72
+          },
+          {
+            "wall_s": 7.026,
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 722.39,
+            "decode_tok_s": 22.02,
+            "prefill_ms": 6838.4,
+            "ttft_s": 6.884,
+            "cached_tokens": 1320
+          }
+        ],
+        "sustained": {
+          "run": {
+            "wall_s": 44.902,
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 83.74,
+            "decode_tok_s": 33.9,
+            "prefill_ms": 537.4,
+            "ttft_s": 0.567,
+            "cached_tokens": 0
+          },
+          "telemetry_before": {
+            "npu_util_pct": 35.72,
+            "npu_mem_used_mb": 6674,
+            "npu_mem_total_mb": 11481,
+            "cpu_total_pct": 5.6
+          },
+          "telemetry_after": {
+            "npu_util_pct": 77.24,
+            "npu_mem_used_mb": 7986,
+            "npu_mem_total_mb": 14717,
+            "cpu_total_pct": 31.3
+          },
+          "during": {
+            "samples": 38,
+            "npu_util_peak": 98.12,
+            "npu_util_median": 69.5,
+            "npu_mem_peak_mb": 11617,
+            "npu_mem_total_mb": 11481
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 24.19,
+            "per_stream_tok_s": 26.57,
+            "wall_s": 6.61,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 24.21,
+            "per_stream_tok_s": 25.9,
+            "wall_s": 13.22,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 26.22,
+            "per_stream_tok_s": 28.37,
+            "wall_s": 24.4,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 0.05,
+            "per_stream_tok_s": 28.12,
+            "wall_s": 7004.54,
+            "ok": 2,
+            "failed": 6
+          }
+        ],
+        "thinking": {}
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct-Turbo",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Thinking",
+      "error": "failed to load"
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "error": "failed to load"
+    },
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-8B",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "error": "failed to load"
+    },
+    {
+      "model": "Qwen/Qwen3-Embedding-0.6B",
+      "error": "failed to load"
+    }
+  ]
+}

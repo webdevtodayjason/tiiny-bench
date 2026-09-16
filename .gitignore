@@ -4,3 +4,7 @@ report.html
 
 # graft's local graph cache, regenerable, not committed (run `graft build`).
 /graft/
+
+# Agent worktrees, never part of the benchmark. Not .claude itself: the
+# settings and helpers in there are checked in and have to stay visible.
+.claude/worktrees/
