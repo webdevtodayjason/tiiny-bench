@@ -105,3 +105,47 @@ jobs:
         run: |
           if [ -f serve.pid ]; then kill "$(cat serve.pid)" 2>/dev/null || true; fi
           echo "--- serve.log ---"; cat serve.log 2>/dev/null || true
+
+  page:
+    # One operating system on purpose. Script order is not platform-specific,
+    # and the matrix above is what covers the part that is. This job exists
+    # because the static check next to it catches one shape of the 0.1.1 bug
+    # while a real browser catches the class: any uncaught error at the top of
+    # that script stops the whole thing, the page still paints, and the app
+    # looks finished with every control dead.
+    name: page (headless chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: a browser
+        run: |
+          npm init -y > /dev/null
+          npm install --no-save "playwright@^1"
+          npx playwright install --with-deps chromium
+
+      - name: start the app with no device and no key
+        run: |
+          python tiiny-bench --serve 8471 > serve.log 2>&1 &
+          echo $! > serve.pid
+          for i in $(seq 1 60); do
+            curl -fsS --max-time 10 http://127.0.0.1:8471/api/device -o /dev/null && break
+            sleep 2
+          done
+
+      - name: the page runs, asks for the device, and the find button works
+        run: node .github/page-check.mjs http://127.0.0.1:8471/
+
+      - name: stop it
+        if: always()
+        run: |
+          if [ -f serve.pid ]; then kill "$(cat serve.pid)" 2>/dev/null || true; fi
+          echo "--- serve.log ---"; cat serve.log 2>/dev/null || true
