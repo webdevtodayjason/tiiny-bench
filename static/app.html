@@ -228,11 +228,17 @@ input.txt:focus{outline:none;border-color:var(--orange)}
 label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--steel)}
 .note{color:var(--dim);font-size:11.5px;margin-top:9px;text-wrap:pretty}
 @media (max-width:820px){
-  body{grid-template-columns:1fr}
-  nav{position:relative;height:auto}
-  .navlist{display:flex;overflow-x:auto;padding:8px}
+  /* The nav is meant to become a strip that scrolls inside itself. It did not:
+     a grid item defaults to min-width:auto and is free to grow to its content,
+     so at 390 the strip made the whole page 1083px wide and every panel, the
+     Connection panel included, sat off the right edge behind a sideways scroll.
+     min-width:0 is what lets overflow-x:auto apply to the strip instead. */
+  body{grid-template-columns:minmax(0,1fr)}
+  nav{position:relative;height:auto;min-width:0}
+  .navlist{display:flex;overflow-x:auto;padding:8px;min-width:0}
   .navlist .sect{display:none}
   .navlist button{white-space:nowrap}
+  .brand{min-width:0}
 }
 
 /* ---- confirm dialog -------------------------------------------------- */
@@ -415,7 +421,7 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <h3>Available to download</h3>
     <p class="note" style="margin:-4px 0 10px">Everything the vendor catalogue offers that is not
        here yet. A benchmark that cannot fetch a model it has not got has a dead end in it.</p>
-    <div class="tw" id="mavail"><div class="empty">—</div></div>
+    <div class="tw" id="mavail"><div class="empty">-</div></div>
   </div>
 </section>
 
@@ -496,6 +502,14 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 
 <script>
 
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+
+/* Everything below runs inside this IIFE and $ is defined above it, because
+   it has to be: a statement up here that calls $ before that line has run is
+   a ReferenceError, the whole <script> stops on it, and the page comes up
+   looking finished with every button dead. That shipped in 0.1.1. */
 /* ---- confirm dialog -------------------------------------------------- */
 var _ask = null;
 function ask(title, body, what, yes, danger){
@@ -518,9 +532,7 @@ document.addEventListener('keydown', function(e){
   if(e.key==='Escape') askClose(false);
   if(e.key==='Enter') askClose(true);
 });
-(function(){
-"use strict";
-var $ = function(id){ return document.getElementById(id); };
+
 var CHAT = {"Text Generation":1,"Image-Text-to-Text":1};
 var TESTS = [["prefill","prefill scaling","how a long prompt scales"],
              ["sustained","sustained generation","1500 tokens unbroken"],
@@ -573,8 +585,33 @@ function catalog(){
     mgrid();
   });
 }
+/* Two callers wanting the same thing at the same moment is one request, not
+   two. Routing and the bootstrap both want the board on load, and without this
+   the page asked for it three times before it had drawn anything once. Only
+   concurrent calls share: a later refresh still goes to the server. */
+var INFLIGHT = {};
+function once(k, f){
+  if (INFLIGHT[k]) return INFLIGHT[k];
+  var pr = f();
+  INFLIGHT[k] = pr;
+  function clear(v){ if (INFLIGHT[k] === pr) delete INFLIGHT[k]; return v; }
+  return pr.then(clear, function(e){ clear(); throw e; });
+}
+function runsData(){
+  /* The dashboard and the history table both want this list on load, and the
+     dashboard asks again once the catalog lands. Sharing the request, not the
+     rendering, means one round trip and two things drawn from it. */
+  return once('runs', function(){ return j('/api/runs').catch(function(){ return {}; }); });
+}
 function board(){
-  return j('/api/leaderboard').then(function(d){ S.board=d; drawBoard(); drawBudget(); });
+  /* Always settles with something. dash() retries while S.board is unset, so a
+     failing endpoint that left it undefined was an endless retry rather than an
+     empty table, and the unhandled rejection went to the console where nobody
+     reading the page would see it. */
+  return once('board', function(){
+    return j('/api/leaderboard').catch(function(){ return {classes:[]}; })
+      .then(function(d){ S.board = d || {classes:[]}; drawBoard(); drawBudget(); });
+  });
 }
 
 /* ---- dashboard ------------------------------------------------------ */
@@ -587,27 +624,27 @@ function dash(){
   var best=rows.filter(function(r){return r.per_unit;})
                .sort(function(a,b){return b.per_unit-a.per_unit;})[0];
   $('dstats').innerHTML =
-    stat('▲', top? top.decode_tok_s.toFixed(1)+'<small>tok/s</small>' : '—',
+    stat('▲', top? top.decode_tok_s.toFixed(1)+'<small>tok/s</small>' : '-',
          'fastest decode', top? sh(top.model):'run one to find out') +
-    stat('◈', best? best.per_unit.toFixed(2)+'<small>tok/s per unit</small>' : '—',
-         'best per NPU unit', best? sh(best.model):'—') +
+    stat('◈', best? best.per_unit.toFixed(2)+'<small>tok/s per unit</small>' : '-',
+         'best per NPU unit', best? sh(best.model):'-') +
     stat('▣', String(rows.length), 'models measured',
          (S.cat.length||0)+' installed on the box') +
-    stat('↻', String(S.runs||0), 'runs on disk', S.lastStamp||'—');
+    stat('↻', String(S.runs||0), 'runs on disk', S.lastStamp||'-');
   drawBoard($('dboard'), 3); drawJobs(); drawCoverage(); drawBudget();
-  j('/api/runs').then(function(d){
+  runsData().then(function(d){
     // The count comes from this same response, not from whatever history_()
     // happened to have fetched first. It was racing and showing zero.
     S.runs=(d.runs||[]).length; S.lastStamp=(d.runs||[])[0]&&d.runs[0].stamp;
     var st=$('dstats').querySelectorAll('.stat');
     if(st[3]){ st[3].querySelector('.v').textContent=String(S.runs);
-               st[3].querySelector('.n').textContent=S.lastStamp||'—'; }
+               st[3].querySelector('.n').textContent=S.lastStamp||'-'; }
     var rs=(d.runs||[]).slice(0,5);
     $('drecent').innerHTML = rs.length? rs.map(function(r){
       return '<div class="d" style="padding:10px 15px;border-bottom:1px solid var(--line)">'
         +'<div class="n" style="font-size:12.5px">'+esc(r.label||'run')+'</div>'
         +'<div class="s" style="color:var(--dim);font-size:11px">'+esc(r.stamp)+' · '
-        +esc((r.models||[]).map(sh).join(', ')||'—')+'</div></div>';
+        +esc((r.models||[]).map(sh).join(', ')||'-')+'</div></div>';
     }).join('') : '<div class="empty">nothing yet</div>';
   });
 }
@@ -640,10 +677,10 @@ function classTable(c, limit){
       +'<div class="msub">'+esc(r.params||'')+(r.size_gb?' · '+r.size_gb+' GB':'')+'</div></td>'
       +'<td class="num"><div style="display:flex;align-items:center;gap:9px;justify-content:flex-end">'
         +'<span class="meter"><i style="width:'+Math.max(0,Math.min(100,pct)).toFixed(0)+'%"></i></span>'
-        +'<b>'+(r.score!=null?r.score:'—')+'</b></div></td>'
-      +'<td class="num">'+(r.npu||'—')+'</td>'
-      +'<td class="num" style="color:var(--hot)">'+(r.per_unit!=null?r.per_unit.toFixed(2):'—')+'</td>'
-      +'<td>'+(awards(r)||'<span style="color:var(--dim)">—</span>')+'</td>'
+        +'<b>'+(r.score!=null?r.score:'-')+'</b></div></td>'
+      +'<td class="num">'+(r.npu||'-')+'</td>'
+      +'<td class="num" style="color:var(--hot)">'+(r.per_unit!=null?r.per_unit.toFixed(2):'-')+'</td>'
+      +'<td>'+(awards(r)||'<span style="color:var(--dim)">-</span>')+'</td>'
       +'<td class="num" style="color:var(--dim)">'+r.runs+'</td></tr>';
     }).join('')+'</tbody></table></div>';
 }
@@ -851,13 +888,13 @@ $('unloadall').addEventListener('click', function(){
 });
 
 function history_(){
-  j('/api/runs').then(function(d){
+  return runsData().then(function(d){
     var rs=d.runs||[]; S.runs=rs.length; S.lastStamp=rs[0]&&rs[0].stamp;
     $('history').innerHTML= rs.length? '<table><thead><tr><th>when</th><th>label</th>'
       +'<th>models</th><th>file</th></tr></thead><tbody>'
       +rs.map(function(r){
         return '<tr><td>'+esc(r.stamp)+'</td><td style="color:var(--hot)">'+esc(r.label||'')+'</td>'
-        +'<td>'+esc((r.models||[]).map(sh).join(', ')||'—')+'</td>'
+        +'<td>'+esc((r.models||[]).map(sh).join(', ')||'-')+'</td>'
         +'<td style="color:var(--dim);font-size:11.5px">'+esc(r.file)+'</td></tr>';
       }).join('')+'</tbody></table>' : '<div class="empty">nothing yet</div>';
   });
@@ -1091,47 +1128,112 @@ $('method').innerHTML=[
 }).join('');
 
 /* ---- connection ------------------------------------------------------- */
+/* This is the panel somebody opens when nothing else in the app works, so it
+   never waits on a request that needs a device in order to answer. It paints a
+   looking state before the first fetch leaves, it says plainly when nothing
+   answered, and the address box and the key box are usable either way. */
 function connStat(k,v){
   return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v||'-')+'</div></div>';
 }
+var WHERELOOKED = 'the USB cable first, then a discovery datagram on :39217, then '
+  + 'this machine\u2019s own /24 on :39218';
+var NOKEY = 'No key yet. Paste it here.';
+function shortSource(v){
+  /* w.source is a sentence when it was a scan and a full file path when it was
+     the saved config, and a tile is no place for /Users/somebody/.config/... */
+  if (!v) return '-';
+  var cut = v.lastIndexOf('/') >= 0 ? v.lastIndexOf('/') : v.lastIndexOf('\\');
+  return cut >= 0 ? 'saved (' + v.slice(cut+1) + ')' : v;
+}
+
+/* A stat tile holds a few words in a large face. Anything longer than that
+   belongs in the note under the box, where it is a sentence rather than a wall
+   of display type running off the edge of the card. */
+function connLooking(){
+  $('connstats').innerHTML = connStat('device', 'Looking for your Tiiny\u2026');
+  $('conncand').textContent = 'Looking on ' + WHERELOOKED + '.';
+  $('connkeyr').textContent = '';
+  $('connkeyn').textContent = NOKEY;
+  $('connerr').hidden = true;
+  $('connkeyerr').hidden = true;
+}
+function connNothing(d){
+  $('connstats').innerHTML =
+      connStat('device', 'None answered')
+    + connStat('looked on', 'cable, :39217, this /24')
+    + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set')
+    + connStat('what to do', 'Type the address');
+  $('connhost').placeholder = '192.168.1.50';
+  $('conncand').textContent = 'Looked on ' + WHERELOOKED + ', then at '
+    + ((d.candidates||[]).join(', ') || 'the TiinyOS client')
+    + '. A Tiiny on another network hears none of that, so type its address here.';
+}
+function connFound(d){
+  var dev = d.device || {};
+  $('connstats').innerHTML =
+      connStat('device', dev.name || 'found, unnamed')
+    + connStat('reached at', d.host + (d.port===80 ? '' : ':'+d.port))
+    + connStat('how', (d.plane||'?') + ', ' +
+        (d.transport==='vhost' ? 'port 80 as '+d.vhost : 'direct port '+d.port))
+    + connStat('found by', shortSource(d.source))
+    + connStat('firmware', dev.os ? 'TiinyOS '+dev.os
+               + (dev.service ? ', service '+dev.service : '') : '-')
+    + connStat('serial', d.serial || dev.serial || '-')
+    + connStat('memory', dev.ram || '-')
+    + connStat('storage', dev.storage || '-')
+    + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set');
+  $('connhost').placeholder = d.host;
+  $('conncand').textContent = 'Looked on ' + WHERELOOKED + ', then at '
+    + ((d.candidates||[]).join(', ') || 'the TiinyOS client') + '.';
+}
 function conn(){
   return j('/api/device').then(function(d){
-    var dev = d.device || {};
-    $('connstats').innerHTML =
-        connStat('device', dev.name || 'found, unnamed')
-      + connStat('reached at', d.host + (d.port===80 ? '' : ':'+d.port))
-      + connStat('how', (d.plane||'?') + ', ' +
-          (d.transport==='vhost' ? 'port 80 as '+d.vhost : 'direct port '+d.port))
-      + connStat('found by', d.source || '-')
-      + connStat('firmware', dev.os ? 'TiinyOS '+dev.os
-                 + (dev.service ? ', service '+dev.service : '') : '-')
-      + connStat('serial', d.serial || dev.serial || '-')
-      + connStat('memory', dev.ram || '-')
-      + connStat('storage', dev.storage || '-')
-      + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set');
+    d = d || {};
     $('connhost').value = '';
-    $('connhost').placeholder = d.host;
-    $('conncand').textContent = 'USB /30 peers first, then this machine’s own /24 '
-      + 'on :39218, then ' + (d.candidates||[]).join(', ');
+    if (d.host) connFound(d); else connNothing(d);
     $('connkeyr').textContent = d.key_set ? d.key_hint : 'needed';
     $('connkeyn').textContent = d.key_set
       ? (d.key_source==='TIINY_KEY'
            ? 'Using TIINY_KEY from the environment; it wins over anything saved.'
            : 'Read from ' + (d.key_source || d.config) + '. A key pasted here is saved in '
              + d.config + ', readable only by you.')
-      : 'No key yet. The benchmark cannot talk to the device without one.';
+      : NOKEY + ' One static key authorises everything on the device, and the '
+        + 'benchmark cannot talk to it without one.';
     return d;
+  }).catch(function(){
+    $('connstats').innerHTML =
+        connStat('device', 'The app could not ask this machine')
+      + connStat('what to do', 'Reload the page, or restart it from the farm');
+    return {};
   });
 }
 function connPost(body, errEl){
   $(errEl).hidden = true;
+  var b = $('credetect'), was = b.textContent;
+  b.disabled = true; b.textContent = 'Looking\u2026';
+  function done(){ b.disabled = false; b.textContent = was; }
   return j('/api/device',{method:'POST',headers:{'Content-Type':'application/json'},
                           body:JSON.stringify(body)}).then(function(r){
-    if(r.error){ $(errEl).textContent = r.error; $(errEl).hidden = false; return null; }
-    return conn().then(function(){ return catalog(); });
+    r = r || {};
+    if(r.error){
+      $(errEl).textContent = r.error; $(errEl).hidden = false;
+      // Still refresh: a failed search is a result, and the panel has to show it
+      // rather than keep whatever it happened to be showing before.
+      return conn().then(done).then(function(){ return null; });
+    }
+    return conn().then(function(){ return catalog().catch(function(){}); })
+                 .then(done).then(function(){ return r; });
+  }).catch(function(){
+    $(errEl).textContent = 'The app could not be reached. Reload the page.';
+    $(errEl).hidden = false;
+    done();
+    return null;
   });
 }
-$('credetect').addEventListener('click', function(){ connPost({rediscover:true},'connerr'); });
+$('credetect').addEventListener('click', function(){
+  connLooking();
+  connPost({rediscover:true},'connerr');
+});
 $('connsave').addEventListener('click', function(){
   var h = $('connhost').value.trim();
   if(h) connPost({host:h},'connerr');
@@ -1143,14 +1245,20 @@ $('connkeysave').addEventListener('click', function(){
 });
 
 /* ---- go ------------------------------------------------------------- */
-catalog().then(function(){ return board(); }).then(function(){
-  conn();
-  history_();
-  idlePoll();
-  j('/api/state').then(function(d){ phase(d); if(d.running){ connect(); go('live'); } });
-  var p=location.hash.slice(1);
-  go(p && $('p-'+p) ? p : 'dash');
-});
+/* Routing and the connection panel go up first and on their own. Hanging the
+   first go() off the catalog meant one slow or failed request left every
+   button on the page inert, which is what a tester sees as "it does nothing".
+   Each leg catches its own failure so no one of them can take the rest down. */
+connLooking();
+var p0 = location.hash.slice(1);
+go(p0 && $('p-'+p0) ? p0 : 'dash');
+conn();
+history_();
+idlePoll();
+catalog().catch(function(){}).then(function(){ return board().catch(function(){}); })
+  .then(function(){ dash(); }).catch(function(){});
+j('/api/state').then(function(d){ phase(d); if(d.running){ connect(); go('live'); } })
+  .catch(function(){});
 })();
 </script>
 </html>

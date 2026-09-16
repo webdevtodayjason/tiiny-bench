@@ -177,6 +177,14 @@ def run_suite(label, models, tests):
         report.build(bench.OUT, HERE / "report.html")
         bench.say("\n  report rebuilt")
         S.bus.publish("finished", {"file": path.name})
+    except SystemExit as exc:
+        # The one thing a run stops for that is not a fault: no key, or no box.
+        # bench.key() and connect() both say what to do in a sentence, and that
+        # sentence is the whole error. Without this clause the thread died
+        # silently and the page just went quiet, which is the worst of both.
+        S.error = str(exc)
+        bench.say(f"\n  STOPPED {S.error}")
+        S.bus.publish("failed", {"error": S.error})
     except Exception as exc:  # noqa: BLE001
         S.error = f"{type(exc).__name__}: {exc}"
         bench.say(f"\n  FAILED {S.error}")
@@ -230,6 +238,8 @@ def fits(models):
         tok = bench.key()
         cat = {m["id"]: m for m in bench.catalog(tok)}
         live = bench.running(tok)
+    except SystemExit as exc:
+        return {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
 
@@ -324,11 +334,16 @@ def leaderboard():
             if src == "embed" and blk.get("dim"):
                 e["dim"] = blk["dim"]
 
+    # A leaderboard is built out of result files on disk and needs no key at
+    # all. The key is only for the extra columns, so no key means fewer columns
+    # rather than no answer. SystemExit is listed because that is what
+    # bench.key() raises, and it is not an Exception: catching only Exception
+    # here dropped the connection, and the dashboard died with it.
     try:
         tok = bench.key()
         cat = {m["id"]: m for m in bench.catalog(tok)}
         live = bench.running(tok)
-    except Exception:  # noqa: BLE001
+    except (Exception, SystemExit):  # noqa: BLE001
         cat, live = {}, []
 
     rows = []
