@@ -26,7 +26,7 @@ class Interfaces(unittest.TestCase):
         # Windows, so a Windows tester got an empty candidate list and a scan
         # that could not see a Tiiny on the same network.
         self.assertNotIn("subprocess", bench.__dict__)
-        self.assertNotIn("subprocess", pathlib.Path(bench.__file__).read_text()
+        self.assertNotIn("subprocess", pathlib.Path(bench.__file__).read_text(encoding="utf-8")
                          .split("UUID_RE")[0])
 
     def test_loopback_is_never_a_candidate(self):
@@ -116,7 +116,7 @@ class WhereWithNoBox(unittest.TestCase):
             self.assertTrue(err)
 
     def test_the_not_found_message_names_every_probe(self):
-        src = pathlib.Path(bench.__file__).read_text()
+        src = pathlib.Path(bench.__file__).read_text(encoding="utf-8")
         self.assertIn("asked the responder on", src)
         self.assertIn("A box on another network hears none of that", src)
 
@@ -132,7 +132,7 @@ class PageLoads(unittest.TestCase):
 
     def setUp(self):
         self.src = (pathlib.Path(bench.__file__).parent
-                    / "static" / "app.html").read_text()
+                    / "static" / "app.html").read_text(encoding="utf-8")
 
     def test_the_dollar_helper_is_defined_before_it_is_used(self):
         define = self.src.index("var $ = function(id)")
@@ -174,7 +174,7 @@ class NarrowScreen(unittest.TestCase):
 
     def setUp(self):
         self.src = (pathlib.Path(bench.__file__).parent
-                    / "static" / "app.html").read_text()
+                    / "static" / "app.html").read_text(encoding="utf-8")
 
     def test_the_nav_strip_scrolls_inside_itself(self):
         # Without min-width:0 the nav grew to its content and took the page to
@@ -184,6 +184,33 @@ class NarrowScreen(unittest.TestCase):
         self.assertIn("min-width:0", block)
         self.assertIn("minmax(0,1fr)", block)
         self.assertIn("overflow-x:auto", block)
+
+
+class WindowsText(unittest.TestCase):
+    """Reading and writing text without naming the encoding is a Windows bug.
+
+    Python uses the locale encoding when none is given. On a Windows runner that
+    is cp1252, so a UTF-8 file comes back as mojibake and a UTF-8 string cannot
+    always be written at all. It cost this branch a red Windows job: the nav
+    icons are U+25Cx, whose middle UTF-8 byte is 0x97, which is an em dash in
+    cp1252, so the house-style check found eight em dashes in a file that has
+    none. The report is the one that mattered: it writes a file that declares
+    charset=utf-8 and was writing it in whatever the machine felt like.
+    """
+
+    FILES = ["bench.py", "serve.py", "report.py"]
+
+    def test_every_text_read_and_write_names_utf8(self):
+        here = pathlib.Path(bench.__file__).parent
+        for f in self.FILES:
+            for n, line in enumerate(
+                    (here / f).read_text(encoding="utf-8").splitlines(), 1):
+                if "read_text()" in line:
+                    self.fail(f"{f}:{n} read_text() with no encoding")
+                if "write_text(" in line and "encoding=" not in line:
+                    # The call may wrap; only flag a single-line call.
+                    if line.rstrip().endswith(")"):
+                        self.fail(f"{f}:{n} write_text() with no encoding")
 
 
 class NoEmDashes(unittest.TestCase):
@@ -196,7 +223,7 @@ class NoEmDashes(unittest.TestCase):
         for f in ["bench.py", "serve.py", "report.py", "static/app.html",
                   "tiiny-app.json", "tests/test_discovery.py", "README.md",
                   ".gitignore", ".github/workflows/ci.yml"]:
-            n = (here / f).read_text().count(self.EM)
+            n = (here / f).read_text(encoding="utf-8").count(self.EM)
             self.assertEqual(n, 0, f"{f} has {n} em dashes")
 
 

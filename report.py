@@ -61,7 +61,7 @@ def load(outdir: pathlib.Path):
     runs = []
     for f in sorted(outdir.glob("*.json")):
         try:
-            d = json.loads(f.read_text())
+            d = json.loads(f.read_text(encoding="utf-8"))
         except ValueError:
             continue
         base = {"label": d.get("label") or f.stem, "stamp": d.get("stamp") or f.stem[:15],
@@ -444,9 +444,11 @@ footer a{color:var(--steel)}
 def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
     runs = load(outdir)
     if not runs:
-        dest.write_text("<!doctype html><meta charset=utf-8><title>TiinyBench</title>"
-                        "<body style='font:16px monospace;padding:3em'>"
-                        "No results yet. Run <code>tiiny-bench --label first-run</code>.")
+        dest.write_text(
+            "<!doctype html><meta charset=utf-8><title>TiinyBench</title>"
+            "<body style='font:16px monospace;padding:3em'>"
+            "No results yet. Run <code>tiiny-bench --label first-run</code>.",
+            encoding="utf-8")
         return dest
 
     newest = max(runs, key=lambda r: r["stamp"])
@@ -525,7 +527,7 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
     body.append("".join(foot))
 
     body.append("</div></body></html>")
-    dest.write_text("".join(body))
+    dest.write_text("".join(body), encoding="utf-8")
     return dest
 
 

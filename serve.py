@@ -152,14 +152,14 @@ def run_suite(label, models, tests):
                         bench.unload(tok, other)
                 if not bench.load(tok, model):
                     rec["models"].append({"model": model, "error": "failed to load"})
-                    path.write_text(json.dumps(rec, indent=2))
+                    path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                     continue
             try:
                 rec["models"].append(bench.suite(tok, model, tests, meta))
             finally:
                 # After every model, always. A sweep is long and a box that
                 # reboots at minute fifty should not cost the whole run.
-                path.write_text(json.dumps(rec, indent=2))
+                path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                 S.bus.publish("saved", {"file": path.name,
                                         "models": len(rec["models"])})
             if touching:
@@ -548,7 +548,7 @@ class Handler(BaseHTTPRequestHandler):
             runs = []
             for f in sorted(bench.OUT.glob("*.json"), reverse=True):
                 try:
-                    d = json.loads(f.read_text())
+                    d = json.loads(f.read_text(encoding="utf-8"))
                 except ValueError:
                     continue
                 ms = ([m.get("model") for m in d.get("models", [])]

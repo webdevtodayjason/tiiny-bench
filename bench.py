@@ -193,7 +193,7 @@ def _refused(exc):
 
 def _config():
     try:
-        return json.loads(CONFIG.read_text())
+        return json.loads(CONFIG.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001 - absent or unreadable is just "nothing saved"
         return {}
 
@@ -203,7 +203,7 @@ def save_config(**kw):
     cfg = _config()
     cfg.update({k: v for k, v in kw.items() if v is not None})
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=1))
+    CONFIG.write_text(json.dumps(cfg, indent=1), encoding="utf-8")
     try:
         CONFIG.chmod(0o600)
     except OSError:
@@ -214,7 +214,7 @@ def save_config(**kw):
 def _farm_device():
     """What `farm device` wrote, or an empty dict."""
     try:
-        d = json.loads(FARM_DEVICE.read_text())
+        d = json.loads(FARM_DEVICE.read_text(encoding="utf-8"))
         return d if isinstance(d, dict) else {}
     except Exception:  # noqa: BLE001
         return {}
@@ -1398,7 +1398,7 @@ def selfcheck(tok):
     try:
         OUT.mkdir(exist_ok=True)
         probe = OUT / ".selfcheck"
-        probe.write_text("ok")
+        probe.write_text("ok", encoding="utf-8")
         probe.unlink()
         step("results directory writable", True, str(OUT))
     except Exception as exc:  # noqa: BLE001
@@ -1441,7 +1441,8 @@ def main():
     OUT.mkdir(exist_ok=True)
 
     if a.show:
-        print(json.dumps(json.loads(pathlib.Path(a.show).read_text()), indent=2)[:4000])
+        print(json.dumps(json.loads(
+            pathlib.Path(a.show).read_text(encoding="utf-8")), indent=2)[:4000])
         return 0
     if a.report:
         import report
@@ -1567,7 +1568,7 @@ def main():
                     unload(tok, other)
             if not load(tok, model):
                 rec["models"].append({"model": model, "error": "failed to load"})
-                path.write_text(json.dumps(rec, indent=2))
+                path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                 continue
         try:
             rec["models"].append(suite(tok, model, want, meta))
@@ -1577,7 +1578,7 @@ def main():
         finally:
             # Checkpoint after EVERY model. A sweep is an hour long and a box
             # that reboots at minute 50 should not cost the whole run.
-            path.write_text(json.dumps(rec, indent=2))
+            path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
         if touching:
             unload(tok, model)
 

@@ -11,6 +11,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# PYTHONUTF8 is deliberately not set. Forcing UTF-8 would hide exactly the
+# class of bug this matrix is here to find: Python uses the locale encoding when
+# a read or a write does not name one, and on Windows that is cp1252.
+
 permissions:
   contents: read
 
@@ -60,7 +64,7 @@ jobs:
           cat device.json
           python - <<'PY'
           import json, sys
-          d = json.load(open("device.json"))
+          d = json.load(open("device.json", encoding="utf-8"))
           # No device here, so the page has to be told that plainly rather than
           # be handed a half-filled record it would render as a found box.
           assert d["host"] == "", d
@@ -77,7 +81,7 @@ jobs:
           # SystemExit, which `except Exception` does not catch, so a fresh
           # install with no key got a dead dashboard.
           curl -fsS --max-time 60 http://127.0.0.1:8471/api/leaderboard -o board.json
-          python -c "import json;d=json.load(open('board.json'));assert 'classes' in d, d;print('ok: leaderboard without a key')"
+          python -c "import json;d=json.load(open('board.json',encoding='utf-8'));assert 'classes' in d, d;print('ok: leaderboard without a key')"
 
       - name: the page is served whole
         shell: bash
