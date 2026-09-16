@@ -2,5 +2,5 @@ __pycache__/
 .DS_Store
 report.html
 
-# graft's local graph cache — regenerable, not committed (run `graft build`).
+# graft's local graph cache, regenerable, not committed (run `graft build`).
 /graft/

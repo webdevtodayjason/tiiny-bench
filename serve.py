@@ -152,14 +152,14 @@ def run_suite(label, models, tests):
                         bench.unload(tok, other)
                 if not bench.load(tok, model):
                     rec["models"].append({"model": model, "error": "failed to load"})
-                    path.write_text(json.dumps(rec, indent=2))
+                    path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                     continue
             try:
                 rec["models"].append(bench.suite(tok, model, tests, meta))
             finally:
                 # After every model, always. A sweep is long and a box that
                 # reboots at minute fifty should not cost the whole run.
-                path.write_text(json.dumps(rec, indent=2))
+                path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                 S.bus.publish("saved", {"file": path.name,
                                         "models": len(rec["models"])})
             if touching:
@@ -177,6 +177,14 @@ def run_suite(label, models, tests):
         report.build(bench.OUT, HERE / "report.html")
         bench.say("\n  report rebuilt")
         S.bus.publish("finished", {"file": path.name})
+    except SystemExit as exc:
+        # The one thing a run stops for that is not a fault: no key, or no box.
+        # bench.key() and connect() both say what to do in a sentence, and that
+        # sentence is the whole error. Without this clause the thread died
+        # silently and the page just went quiet, which is the worst of both.
+        S.error = str(exc)
+        bench.say(f"\n  STOPPED {S.error}")
+        S.bus.publish("failed", {"error": S.error})
     except Exception as exc:  # noqa: BLE001
         S.error = f"{type(exc).__name__}: {exc}"
         bench.say(f"\n  FAILED {S.error}")
@@ -230,6 +238,8 @@ def fits(models):
         tok = bench.key()
         cat = {m["id"]: m for m in bench.catalog(tok)}
         live = bench.running(tok)
+    except SystemExit as exc:
+        return {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         return {"error": f"{type(exc).__name__}: {exc}"}
 
@@ -324,11 +334,16 @@ def leaderboard():
             if src == "embed" and blk.get("dim"):
                 e["dim"] = blk["dim"]
 
+    # A leaderboard is built out of result files on disk and needs no key at
+    # all. The key is only for the extra columns, so no key means fewer columns
+    # rather than no answer. SystemExit is listed because that is what
+    # bench.key() raises, and it is not an Exception: catching only Exception
+    # here dropped the connection, and the dashboard died with it.
     try:
         tok = bench.key()
         cat = {m["id"]: m for m in bench.catalog(tok)}
         live = bench.running(tok)
-    except Exception:  # noqa: BLE001
+    except (Exception, SystemExit):  # noqa: BLE001
         cat, live = {}, []
 
     rows = []
@@ -533,7 +548,7 @@ class Handler(BaseHTTPRequestHandler):
             runs = []
             for f in sorted(bench.OUT.glob("*.json"), reverse=True):
                 try:
-                    d = json.loads(f.read_text())
+                    d = json.loads(f.read_text(encoding="utf-8"))
                 except ValueError:
                     continue
                 ms = ([m.get("model") for m in d.get("models", [])]

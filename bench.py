@@ -22,8 +22,9 @@ import errno
 import glob
 import json
 import pathlib
+import re
+import socket
 import statistics
-import subprocess
 import sys
 import threading
 import time
@@ -32,7 +33,7 @@ import urllib.parse
 import urllib.request
 import os
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
@@ -70,6 +71,12 @@ DISCO_PATH = "/device.json"
 
 # A USB-attached Tiiny is a point-to-point /30 inside 172.17/16.
 USB_NET = "172.17."
+
+# The responder every Tiiny runs. One datagram to the broadcast address finds a
+# box whose DHCP lease moved, and finds it without a 254-address sweep. Same
+# port and same token as the farm CLI, because it is the same responder.
+UDP_PORT = 39217
+UDP_TOKEN = b"GADGET_DISCOVER_V1"
 
 # Names the TiinyOS desktop app puts in /etc/resolver, pointed at a proxy on
 # this machine. They work on a Mac running that app and nowhere else, so they
@@ -186,7 +193,7 @@ def _refused(exc):
 
 def _config():
     try:
-        return json.loads(CONFIG.read_text())
+        return json.loads(CONFIG.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001 - absent or unreadable is just "nothing saved"
         return {}
 
@@ -196,7 +203,7 @@ def save_config(**kw):
     cfg = _config()
     cfg.update({k: v for k, v in kw.items() if v is not None})
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=1))
+    CONFIG.write_text(json.dumps(cfg, indent=1), encoding="utf-8")
     try:
         CONFIG.chmod(0o600)
     except OSError:
@@ -207,7 +214,7 @@ def save_config(**kw):
 def _farm_device():
     """What `farm device` wrote, or an empty dict."""
     try:
-        d = json.loads(FARM_DEVICE.read_text())
+        d = json.loads(FARM_DEVICE.read_text(encoding="utf-8"))
         return d if isinstance(d, dict) else {}
     except Exception:  # noqa: BLE001
         return {}
@@ -251,57 +258,102 @@ def device_json(addr, timeout=0.6):
     return d
 
 
-def _mask_bits(mask):
-    """Prefix length from either form of netmask a system tool prints."""
-    if mask.startswith("0x"):
-        return bin(int(mask, 16)).count("1")
-    parts = [int(x) for x in mask.split(".")]
-    if len(parts) != 4:
-        raise ValueError(mask)
-    n = 0
-    for p in parts:
-        n = (n << 8) | p
-    return bin(n).count("1")
+def _holds(addr):
+    """Whether this machine holds this IPv4 address.
+
+    bind succeeds only on an address the host really has and sends nothing, so
+    this asks the operating system directly and answers the same way on macOS,
+    Linux and Windows. Nothing is granted or refused here: no packet leaves.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.bind((addr, 0))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
 
 
-def interfaces():
+def _usb_addresses():
+    """This machine's own side of every USB cable, by bind over 172.17/16.
+
+    A /30 holds a network address, two usable ones and a broadcast, and this
+    machine takes one of the two usable ones, so probing those two in each block
+    of four covers the whole /16 in 32768 binds, about a third of a second.
+    """
+    found = []
+    for third in range(256):
+        for block in range(0, 256, 4):
+            for last in (block + 2, block + 1):
+                addr = "%s%d.%d" % (USB_NET, third, last)
+                if _holds(addr):
+                    found.append(addr)
+                    break
+    return found
+
+
+def _lan_addresses():
+    """Every non-loopback IPv4 this host answers to, as far as the stdlib knows.
+
+    Two sources because neither is complete on its own. A UDP socket connected
+    to a documentation address names the interface this host would route from,
+    which is the one a Tiiny on the network is almost always on, and connecting
+    a datagram socket sends nothing. The host's own name adds the rest on a
+    machine with more than one card. Deduped, order kept.
+    """
+    found = []
+
+    def add(a):
+        if (a and not a.startswith("127.") and not a.startswith(USB_NET)
+                and a.count(".") == 3 and a not in found):
+            found.append(a)
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # TEST-NET-3, reserved for documentation, so nothing is contacted even
+        # if a stack were to decide to send something.
+        s.connect(("203.0.113.1", 9))
+        add(s.getsockname()[0])
+    except OSError:
+        pass
+    finally:
+        s.close()
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET, socket.SOCK_DGRAM):
+            add(info[4][0])
+    except OSError:
+        pass
+    return found
+
+
+_IFACES = None
+
+
+def interfaces(refresh=False):
     """(address, prefix length) for every IPv4 this host holds.
 
-    Stdlib only, so this asks the system's own tool: `ip` on Linux, `ifconfig`
-    on macOS and the BSDs. A machine where neither runs gets no
-    interface-derived candidates and falls back to the rest of the chain.
+    Stdlib only, and identical on every platform. The version that shipped in
+    0.1.1 ran `ip` and then `ifconfig` and Windows has neither, so a Windows
+    tester got an empty list, an empty candidate list, and a scan that found
+    nothing while a Tiiny sat on the same network. Nothing here shells out.
+
+    The prefix length is exact for a cable, which is a /30 by definition, and is
+    taken as /24 for a LAN address because neither stdlib source reports a
+    netmask. lan_candidates() only ever reads the first three octets, so a /24
+    is the whole of what it needs; a host on a wider prefix still gets its own
+    /24 swept, which is the part a benchmark has any business touching.
+
+    Cached, because one scan asks twice and the cable probe is the expensive
+    half. scan() refreshes it, so plugging a cable in and pressing Detect again
+    finds the cable.
     """
-    out = []
-    try:
-        txt = subprocess.run(["ip", "-o", "-4", "addr", "show"],
-                             capture_output=True, text=True, timeout=5).stdout
-        for line in txt.splitlines():
-            for f in line.split():
-                if "/" in f and f[0].isdigit():
-                    a, _, p = f.partition("/")
-                    try:
-                        out.append((a, int(p)))
-                    except ValueError:
-                        pass
-                    break
-    except Exception:  # noqa: BLE001
-        pass
-    if out:
-        return out
-    try:
-        txt = subprocess.run(["ifconfig", "-a"], capture_output=True,
-                             text=True, timeout=5).stdout
-    except Exception:  # noqa: BLE001
-        return out
-    for line in txt.splitlines():
-        f = line.split()
-        if not f or f[0] != "inet" or "netmask" not in f:
-            continue
-        try:
-            out.append((f[1], _mask_bits(f[f.index("netmask") + 1])))
-        except (ValueError, IndexError):
-            continue
-    return out
+    global _IFACES
+    if _IFACES is None or refresh:
+        _IFACES = ([(a, 30) for a in _usb_addresses()]
+                   + [(a, 24) for a in _lan_addresses()])
+    return _IFACES
 
 
 def usb_peers():
@@ -351,15 +403,109 @@ def lan_candidates():
     return out
 
 
+def udp_record(data, where):
+    """The one device a datagram describes, or None.
+
+    A pure function on bytes so the parser can be tested without a socket. A
+    test that broadcast for real would be testing somebody's network, and
+    GitHub's macOS runner refuses broadcast outright (errno 65), so the wire is
+    exactly the part that is never exercised in CI.
+    """
+    try:
+        d = json.loads(data.decode("utf-8", "replace"))
+    except ValueError:
+        return None
+    if not isinstance(d, dict) or not d.get("serial_number"):
+        return None
+    return {"addr": where, "serial": d.get("serial_number"),
+            "name": d.get("device_name"), "transport": d.get("transport")}
+
+
+def udp_targets():
+    """Who to ask: the whole network, then each cable.
+
+    The broadcast address is what finds a box whose lease moved, and it is the
+    only probe here that can find a box this host has no /24 in common with.
+    Each cable is asked directly as well, because a point-to-point /30 does not
+    carry a broadcast worth the name.
+    """
+    return ["255.255.255.255"] + usb_peers()
+
+
+def udp_scan(timeout=1.2, grace=0.4):
+    """Every Tiiny in earshot of one datagram each.
+
+    One packet does what a 254-address sweep does, and does it for a box on a
+    network this host is not sweeping. A host that forbids broadcast, which is
+    what a CI runner does, is not an error: the sweep below still runs, so this
+    can only ever add.
+    """
+    found = []
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    except OSError:
+        return found
+    try:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        except OSError:
+            pass  # A host that forbids broadcast can still be asked directly.
+        asked = False
+        for t in udp_targets():
+            try:
+                sock.sendto(UDP_TOKEN, (t, UDP_PORT))
+                asked = True
+            except OSError:
+                continue
+        if not asked:
+            return found
+        seen = set()
+        deadline = time.monotonic() + timeout
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            try:
+                sock.settimeout(max(0.05, left))
+                data, where = sock.recvfrom(65535)
+            except (socket.timeout, OSError):
+                break
+            rec = udp_record(data, where[0])
+            if not rec or (where[0], rec["serial"]) in seen:
+                continue
+            seen.add((where[0], rec["serial"]))
+            found.append(rec)
+            # The rest of the budget was only ever for boxes that are not there.
+            deadline = min(deadline, time.monotonic() + grace)
+    finally:
+        sock.close()
+    return found
+
+
 def scan(timeout=0.6, workers=64):
     """Every Tiiny this host can see, deduped by serial, USB first.
 
-    A box on Wi-Fi and USB at once answers on both and the two addresses are
-    one device. USB wins the tie: a /30 handed out by the cable cannot move,
-    while a DHCP lease can and did.
+    Three ways, in the order a found address is worth trusting, which is the
+    order the farm CLI uses because it is the same responder answering.
+
+      the cable    a /30 peer, asked for :39218/device.json. Cannot move.
+      a datagram   GADGET_DISCOVER_V1 to the broadcast address. This is the one
+                   that finds a box whose DHCP lease moved, and the only one
+                   that can find a box outside this host's own /24.
+      the sweep    every address in this host's /24 on :39218.
+
+    A box on Wi-Fi and USB at once answers on all three and they are one device.
+    USB wins the tie: a /30 handed out by the cable cannot move, while a DHCP
+    lease can and did.
     """
+    interfaces(refresh=True)
     found = {}
     lock = threading.Lock()
+
+    def keep(rec):
+        cur = found.get(rec["serial"])
+        if cur is None or (cur["plane"] == "lan" and rec["plane"] == "usb"):
+            found[rec["serial"]] = rec
 
     def probe(addr, plane):
         d = device_json(addr, timeout)
@@ -370,11 +516,18 @@ def scan(timeout=0.6, workers=64):
                "name": d.get("device_name"),
                "transport": d.get("transport")}
         with lock:
-            cur = found.get(rec["serial"])
-            if cur is None or (cur["plane"] == "lan" and plane == "usb"):
-                found[rec["serial"]] = rec
+            keep(rec)
 
-    for plane, addrs in (("usb", usb_peers()), ("lan", lan_candidates())):
+    peers = usb_peers()
+    for plane, addrs in (("usb", peers), ("lan", lan_candidates())):
+        if plane == "lan":
+            # Between the cable and the sweep, because a datagram costs one
+            # packet and the sweep costs 254, and an answer here can name an
+            # address the sweep would never have reached.
+            for rec in udp_scan():
+                rec["plane"] = "usb" if rec["addr"] in peers else "lan"
+                with lock:
+                    keep(rec)
         for i in range(0, len(addrs), workers):
             ths = [threading.Thread(target=probe, args=(a, plane))
                    for a in addrs[i:i + workers]]
@@ -501,10 +654,11 @@ def connect(host=None, serial=None, rescan=False, quiet=False):
 
     sys.exit(
         "No Tiiny found.\n"
-        "  Looked for a USB /30 peer, swept this host's own /24 on :%d, and "
-        "tried %s.\n"
-        "  Give it an address with --host, or set TIINY_BASE." % (
-            DISCO_PORT, ", ".join(PROXY_HOSTS)))
+        "  Looked for a USB /30 peer on :%d, asked the responder on :%d, swept "
+        "this host's own /24 on :%d, and tried %s.\n"
+        "  A box on another network hears none of that: give it an address with "
+        "--host, or set TIINY_BASE." % (
+            DISCO_PORT, UDP_PORT, DISCO_PORT, ", ".join(PROXY_HOSTS)))
 
 
 def connect_soft(**kw):
@@ -623,6 +777,10 @@ CHAT_TYPES = {"Text Generation", "Image-Text-to-Text", "Text-to-Image",
               "Text-to-Speech", "Text Embedding"}
 
 
+UUID_RE = re.compile(
+    rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
 def _tiinyos_keys():
     """Every key-shaped string in the TiinyOS app's own storage, most used first.
 
@@ -639,14 +797,19 @@ def _tiinyos_keys():
         home / "Library/Application Support/TiinyOS/Local Storage/leveldb/*.log")))
     if not files:
         return []
-    hits = subprocess.run(
-        ["grep", "-aoh",
-         r"[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}"]
-        + files, capture_output=True, text=True).stdout
+    # Read here rather than through grep: the files are a few megabytes, the
+    # pattern is one regex, and a subprocess is one more thing to be missing.
+    # On Windows grep is missing, and this whole function is a macOS path that
+    # never has files to read there, but a benchmark should not depend on that
+    # to avoid raising FileNotFoundError.
     counts = {}
-    for h in hits.split():
-        h = h.strip()
-        if h:
+    for f in files:
+        try:
+            blob = pathlib.Path(f).read_bytes()
+        except OSError:
+            continue
+        for h in UUID_RE.findall(blob):
+            h = h.decode("ascii")
             counts[h] = counts.get(h, 0) + 1
     return sorted(counts, key=lambda c: -counts[c])
 
@@ -1235,7 +1398,7 @@ def selfcheck(tok):
     try:
         OUT.mkdir(exist_ok=True)
         probe = OUT / ".selfcheck"
-        probe.write_text("ok")
+        probe.write_text("ok", encoding="utf-8")
         probe.unlink()
         step("results directory writable", True, str(OUT))
     except Exception as exc:  # noqa: BLE001
@@ -1278,7 +1441,8 @@ def main():
     OUT.mkdir(exist_ok=True)
 
     if a.show:
-        print(json.dumps(json.loads(pathlib.Path(a.show).read_text()), indent=2)[:4000])
+        print(json.dumps(json.loads(
+            pathlib.Path(a.show).read_text(encoding="utf-8")), indent=2)[:4000])
         return 0
     if a.report:
         import report
@@ -1290,13 +1454,17 @@ def main():
         import serve
         return serve.run(a.serve, host=a.host, serial=a.serial, rescan=a.rescan)
 
-    # Resolving the address is the first thing that happens, and it happens
-    # here rather than at import so that --help and --report still work on a
-    # machine with no Tiiny attached.
-    connect(host=a.host, serial=a.serial, rescan=a.rescan)
-
     if a.where:
-        w = where()
+        # --where is what somebody runs when nothing is working, so a box that
+        # cannot be found is the answer it prints, not a failure it raises. It
+        # exits 0 either way: the question was "what do you see", and "nothing"
+        # is a complete reply to it.
+        w, err = connect_soft(host=a.host, serial=a.serial, rescan=a.rescan)
+        if not w:
+            print(f"\n  tiiny-bench {VERSION}")
+            print("  " + err.strip().replace("\n", "\n  "))
+            print("")
+            return 0
         info = api(mgmt("/api/v1/sys/device_info"), "probe", timeout=10)
         print(f"\n  tiiny-bench {VERSION}")
         print(f"  address    {w['host']}")
@@ -1314,6 +1482,11 @@ def main():
                   f"service {fw.get('version')}")
         print("")
         return 0
+
+    # Resolving the address is the first thing that happens, and it happens
+    # here rather than at import so that --help and --report still work on a
+    # machine with no Tiiny attached.
+    connect(host=a.host, serial=a.serial, rescan=a.rescan)
 
     tok = key()
 
@@ -1395,7 +1568,7 @@ def main():
                     unload(tok, other)
             if not load(tok, model):
                 rec["models"].append({"model": model, "error": "failed to load"})
-                path.write_text(json.dumps(rec, indent=2))
+                path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                 continue
         try:
             rec["models"].append(suite(tok, model, want, meta))
@@ -1405,7 +1578,7 @@ def main():
         finally:
             # Checkpoint after EVERY model. A sweep is an hour long and a box
             # that reboots at minute 50 should not cost the whole run.
-            path.write_text(json.dumps(rec, indent=2))
+            path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
         if touching:
             unload(tok, model)
 

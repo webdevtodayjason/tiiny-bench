@@ -1,0 +1,107 @@
+# Three operating systems, because the bug this file exists to catch was a
+# Windows one: discovery shelled out to `ip` and then `ifconfig`, Windows has
+# neither, and a tester with a Tiiny on the same network was told there was no
+# Tiiny. Nothing here needs a device. Nothing here puts a broadcast on the wire:
+# GitHub's macOS runner refuses one outright, and a test that depended on the
+# runner's network would be testing the runner.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# PYTHONUTF8 is deliberately not set. Forcing UTF-8 would hide exactly the
+# class of bug this matrix is here to find: Python uses the locale encoding when
+# a read or a write does not name one, and on Windows that is cp1252.
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: --where finds nothing and says so, without a traceback
+        shell: bash
+        run: |
+          set -o pipefail
+          python tiiny-bench --where 2>&1 | tee where.txt
+          # Exit 0 is the contract: "what do you see" answered with "nothing"
+          # is a complete reply, and the pipeline above would have failed
+          # otherwise. A traceback is the thing that must never appear.
+          if grep -q "Traceback (most recent call last)" where.txt; then
+            echo "--where printed a traceback"; exit 1
+          fi
+          grep -q "No Tiiny found" where.txt
+          grep -q "asked the responder on" where.txt
+
+      - name: the web app answers /api/device with no device present
+        shell: bash
+        run: |
+          python tiiny-bench --serve 8471 > serve.log 2>&1 &
+          echo $! > serve.pid
+          for i in $(seq 1 60); do
+            if curl -fsS --max-time 10 http://127.0.0.1:8471/api/device -o device.json; then
+              break
+            fi
+            sleep 2
+          done
+          cat device.json
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("device.json", encoding="utf-8"))
+          # No device here, so the page has to be told that plainly rather than
+          # be handed a half-filled record it would render as a found box.
+          assert d["host"] == "", d
+          assert d["key_set"] is False, d
+          assert d["device"] in ({}, None), d
+          assert isinstance(d["candidates"], list) and d["candidates"], d
+          print("ok: /api/device says no device, and says what it looked for")
+          PY
+
+      - name: the leaderboard answers without a key
+        shell: bash
+        run: |
+          # This dropped the connection before 0.1.2: bench.key() raises
+          # SystemExit, which `except Exception` does not catch, so a fresh
+          # install with no key got a dead dashboard.
+          curl -fsS --max-time 60 http://127.0.0.1:8471/api/leaderboard -o board.json
+          python -c "import json;d=json.load(open('board.json',encoding='utf-8'));assert 'classes' in d, d;print('ok: leaderboard without a key')"
+
+      - name: the page is served whole
+        shell: bash
+        run: |
+          curl -fsS --max-time 30 http://127.0.0.1:8471/ -o page.html
+          python - <<'PY'
+          import pathlib
+          s = pathlib.Path("page.html").read_text(encoding="utf-8")
+          # The 0.1.1 field bug: $ was used above the line defining it, the
+          # whole script stopped on a ReferenceError, and every button was dead.
+          define = s.index("var $ = function(id)")
+          assert "$('" not in s[s.index("<script>"):define], "$ used before it is defined"
+          assert "Looking for your Tiiny" in s
+          assert "No key yet. Paste it here" in s
+          print("ok: the page script is in an order that runs")
+          PY
+
+      - name: stop it
+        if: always()
+        shell: bash
+        run: |
+          if [ -f serve.pid ]; then kill "$(cat serve.pid)" 2>/dev/null || true; fi
+          echo "--- serve.log ---"; cat serve.log 2>/dev/null || true
