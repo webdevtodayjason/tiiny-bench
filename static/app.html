@@ -1189,6 +1189,11 @@ function connFound(d){
 function conn(){
   return j('/api/device').then(function(d){
     d = d || {};
+    /* The footer says which box this is. It used to be filled in by the
+       catalog, which needs a key, so a stranger who had found their Tiiny but
+       not yet pasted a key sat looking at "device ..." forever, which reads as
+       "it still has not found anything". This knows the address; say it. */
+    $('host').textContent = d.host || 'not found yet';
     $('connhost').value = '';
     if (d.host) connFound(d); else connNothing(d);
     $('connkeyr').textContent = d.key_set ? d.key_hint : 'needed';
