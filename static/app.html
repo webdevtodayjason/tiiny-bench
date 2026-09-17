@@ -93,6 +93,18 @@ h3{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--stee
   color:var(--steel)}
 .stat .n{margin-top:4px;font-size:11.5px;color:var(--dim)}
 
+/* The connection tiles hold an address, a vhost name or a serial, not a single
+   number, so the display face the dashboard tiles want clips them. A tester at
+   2000px wide was reading "172.17.7.1" off a box that is at 172.17.7.177. The
+   face here is sized for a short line of text and wraps rather than runs off.
+   A grid gives a whole column one width, which is how "1 TB" and "given, port
+   80 as p8800.api.tiiny" ended up the same size, so these lay out in a row that
+   wraps and each tile takes the room its own value needs. */
+#connstats{display:flex;flex-wrap:wrap}
+#connstats .stat{flex:1 1 auto;min-width:min(100%,208px);max-width:min(100%,440px)}
+#connstats .stat .v{font-size:clamp(14px,1.05vw,18px);letter-spacing:-.005em;
+  line-height:1.35;overflow-wrap:anywhere}
+
 /* ---- tables --------------------------------------------------------- */
 .tw{overflow-x:auto;border:1px solid var(--line);border-radius:7px;background:var(--s1)}
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:700px}
@@ -1132,23 +1144,49 @@ $('method').innerHTML=[
    never waits on a request that needs a device in order to answer. It paints a
    looking state before the first fetch leaves, it says plainly when nothing
    answered, and the address box and the key box are usable either way. */
+function escq(s){ return esc(s).replace(/"/g,'&quot;'); }
 function connStat(k,v){
-  return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v||'-')+'</div></div>';
+  /* title as well as text: the value wraps rather than clips now, but a long
+     one is still easier to check by hovering it than by reading it wrapped. */
+  var t = v || '-';
+  return '<div class="stat"><div class="k">'+esc(k)+'</div>'
+    + '<div class="v" title="'+escq(t)+'">'+esc(t)+'</div></div>';
 }
 var WHERELOOKED = 'the USB cable first, then a discovery datagram on :39217, then '
   + 'this machine\u2019s own /24 on :39218';
 var NOKEY = 'No key yet. Paste it here.';
-function shortSource(v){
-  /* w.source is a sentence when it was a scan and a full file path when it was
-     the saved config, and a tile is no place for /Users/somebody/.config/... */
+/* TIINY_BASE and TIINY_KEY are this suite's own environment variables and mean
+   nothing to somebody who was handed a running app, so the tiles name the thing
+   that set them. bench.py decides the order these are tried in and that is
+   untouched; only the words for it are here. */
+var SAIDBY = {
+  'TIINY_BASE': 'the launcher',
+  'TIINY_KEY': 'the launcher',
+  'TIINY_HOST': 'the environment',
+  '--host': 'the address you gave it',
+  'scan': 'a look around this network',
+  'proxy name': 'a TiinyOS name on this Mac',
+  'TiinyOS local storage': 'the TiinyOS app on this Mac',
+  'saved': 'a saved setting',
+  'none': 'nothing yet'
+};
+function plainSource(v){
+  /* w.source is a word when it was a scan and a full file path when it was the
+     farm's device file or the saved config, and a tile is no place for
+     /Users/somebody/.config/... */
   if (!v) return '-';
-  var cut = v.lastIndexOf('/') >= 0 ? v.lastIndexOf('/') : v.lastIndexOf('\\');
-  return cut >= 0 ? 'saved (' + v.slice(cut+1) + ')' : v;
+  if (SAIDBY[v]) return SAIDBY[v];
+  var cut = Math.max(v.lastIndexOf('/'), v.lastIndexOf('\\'));
+  if (cut < 0) return v;
+  if (v.indexOf('.tiinyapps') >= 0) return 'the farm';
+  return 'a saved setting (' + v.slice(cut+1) + ')';
 }
 
-/* A stat tile holds a few words in a large face. Anything longer than that
-   belongs in the note under the box, where it is a sentence rather than a wall
-   of display type running off the edge of the card. */
+/* A stat tile here holds a short line of text: an address, a vhost name, a
+   serial. It used to hold it in the display face the dashboard numbers use,
+   which cut the end off every one of them, so the face and the widths are set
+   for these tiles in the CSS above. Anything longer than a line still belongs
+   in the note under the box, as a sentence. */
 function connLooking(){
   $('connstats').innerHTML = connStat('device', 'Looking for your Tiiny\u2026');
   $('conncand').textContent = 'Looking on ' + WHERELOOKED + '.';
@@ -1161,7 +1199,7 @@ function connNothing(d){
   $('connstats').innerHTML =
       connStat('device', 'None answered')
     + connStat('looked on', 'cable, :39217, this /24')
-    + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set')
+    + connStat('api key', d.key_set ? plainSource(d.key_source) : 'not set')
     + connStat('what to do', 'Type the address');
   $('connhost').placeholder = '192.168.1.50';
   $('conncand').textContent = 'Looked on ' + WHERELOOKED + ', then at '
@@ -1175,13 +1213,13 @@ function connFound(d){
     + connStat('reached at', d.host + (d.port===80 ? '' : ':'+d.port))
     + connStat('how', (d.plane||'?') + ', ' +
         (d.transport==='vhost' ? 'port 80 as '+d.vhost : 'direct port '+d.port))
-    + connStat('found by', shortSource(d.source))
+    + connStat('found by', plainSource(d.source))
     + connStat('firmware', dev.os ? 'TiinyOS '+dev.os
                + (dev.service ? ', service '+dev.service : '') : '-')
     + connStat('serial', d.serial || dev.serial || '-')
     + connStat('memory', dev.ram || '-')
     + connStat('storage', dev.storage || '-')
-    + connStat('api key', d.key_set ? (d.key_source || 'saved') : 'not set');
+    + connStat('api key', d.key_set ? plainSource(d.key_source) : 'not set');
   $('connhost').placeholder = d.host;
   $('conncand').textContent = 'Looked on ' + WHERELOOKED + ', then at '
     + ((d.candidates||[]).join(', ') || 'the TiinyOS client') + '.';
@@ -1199,9 +1237,10 @@ function conn(){
     $('connkeyr').textContent = d.key_set ? d.key_hint : 'needed';
     $('connkeyn').textContent = d.key_set
       ? (d.key_source==='TIINY_KEY'
-           ? 'Using TIINY_KEY from the environment; it wins over anything saved.'
-           : 'Read from ' + (d.key_source || d.config) + '. A key pasted here is saved in '
-             + d.config + ', readable only by you.')
+           ? 'The launcher handed this key over, and a key handed over that way '
+             + 'wins over anything saved.'
+           : 'Read from ' + plainSource(d.key_source || d.config)
+             + '. A key pasted here is saved in ' + d.config + ', readable only by you.')
       : NOKEY + ' One static key authorises everything on the device, and the '
         + 'benchmark cannot talk to it without one.';
     return d;

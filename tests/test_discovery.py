@@ -213,6 +213,132 @@ class WindowsText(unittest.TestCase):
                         self.fail(f"{f}:{n} write_text() with no encoding")
 
 
+class ConnectionTiles(unittest.TestCase):
+    """The 0.1.2 field report: the tiles clipped the values they exist to show.
+
+    Jason, at about 2000px wide, read REACHED AT as 172.17.7.1 off a box that is
+    at 172.17.7.177, and HOW as "given, port 80 as p8800.api." with the rest cut
+    off. The tiles were drawn in the display face the dashboard numbers use, in
+    a grid that gave "1 TB" and a vhost name the same width. The browser job
+    next door measures the result; these are the pieces that have to be there.
+    """
+
+    def setUp(self):
+        self.src = (pathlib.Path(bench.__file__).parent
+                    / "static" / "app.html").read_text(encoding="utf-8")
+
+    def test_the_connection_tiles_have_their_own_face(self):
+        self.assertIn("#connstats .stat .v{font-size:clamp(", self.src)
+
+    def test_a_long_value_wraps_rather_than_runs_off(self):
+        block = self.src[self.src.index("#connstats .stat .v{"):]
+        self.assertIn("overflow-wrap:anywhere", block[:block.index("}")])
+
+    def test_the_tiles_size_to_their_content(self):
+        # A grid gives a whole column one width, which is what made "1 TB" and
+        # a vhost name the same size. A wrapping row gives each tile the room
+        # its own value needs.
+        self.assertIn("#connstats{display:flex;flex-wrap:wrap}", self.src)
+        block = self.src[self.src.index("#connstats .stat{"):]
+        block = block[:block.index("}")]
+        self.assertIn("flex:1 1 auto", block)
+        # and a tile alone on the last row does not run the whole width
+        self.assertIn("max-width:min(", block)
+
+    def test_hovering_a_tile_shows_the_whole_value(self):
+        self.assertIn('<div class="v" title="', self.src)
+
+    def test_the_title_attribute_is_quote_safe(self):
+        # esc() goes through textContent, which leaves a double quote alone, and
+        # the value is now inside a double quoted attribute.
+        self.assertIn("function escq(s){", self.src)
+        self.assertIn("+escq(t)+", self.src)
+
+    def test_the_tiles_name_what_found_the_box_not_the_variable(self):
+        # TIINY_BASE and TIINY_KEY are this suite's own environment variables.
+        # A tester handed a running app has never heard of either.
+        self.assertIn("'TIINY_BASE': 'the launcher'", self.src)
+        self.assertIn("'TIINY_KEY': 'the launcher'", self.src)
+        self.assertIn("plainSource(d.source)", self.src)
+        self.assertIn("plainSource(d.key_source)", self.src)
+        self.assertNotIn("shortSource", self.src)
+
+    def test_the_farm_device_file_is_called_the_farm(self):
+        self.assertIn("return 'the farm'", self.src)
+
+
+class DiscoveryFileIsAskedOnce(unittest.TestCase):
+    """A box handed over in the environment is never scanned for, so its
+    device.json is the only unauthenticated description of it the panel gets.
+    The panel repaints on a timer, so that file is asked for once per address
+    rather than once per repaint."""
+
+    def setUp(self):
+        self.real = bench.device_json
+        bench.DISCO_SEEN.clear()
+        self.asked = []
+
+    def tearDown(self):
+        bench.device_json = self.real
+        bench.DISCO_SEEN.clear()
+
+    def _fake(self, body):
+        def f(addr, timeout=0.6):
+            self.asked.append(addr)
+            return body
+        bench.device_json = f
+
+    def test_one_answer_is_kept(self):
+        self._fake({"serial_number": "TNY1", "device_name": "a Tiiny"})
+        for _ in range(4):
+            self.assertEqual(bench.discovered("10.0.0.5")["device_name"], "a Tiiny")
+        self.assertEqual(self.asked, ["10.0.0.5"])
+
+    def test_silence_is_kept_too(self):
+        # Otherwise every repaint pays the timeout again on a box whose
+        # discovery port does not answer.
+        self._fake(None)
+        for _ in range(3):
+            self.assertEqual(bench.discovered("10.0.0.6"), {})
+        self.assertEqual(self.asked, ["10.0.0.6"])
+
+    def test_no_address_asks_nothing(self):
+        self._fake({"serial_number": "TNY1"})
+        self.assertEqual(bench.discovered(""), {})
+        self.assertEqual(self.asked, [])
+
+    def test_identify_names_the_box_when_management_says_nothing(self):
+        # Management is on port 80 and a box handed over by the launcher is not
+        # always reachable there. Before this the panel read "found, unnamed"
+        # over a column of dashes on a box that was answering fine.
+        self._fake({"serial_number": "TNYM26072400300011Q",
+                    "device_name": "a Tiiny on a desk",
+                    "transport": ["lan", "usb"]})
+        real_api, real_host = bench.api, bench.HOST
+        try:
+            bench.api = lambda *a, **k: {"_error": "timed out"}
+            bench.HOST = "172.17.7.177"
+            got = bench.identify()
+        finally:
+            bench.api, bench.HOST = real_api, real_host
+        self.assertEqual(got["name"], "a Tiiny on a desk")
+        self.assertEqual(got["serial"], "TNYM26072400300011Q")
+
+    def test_a_blank_name_from_management_does_not_win(self):
+        # out["name"] = None used to be a present key, so setdefault left it,
+        # and the tile said "found, unnamed" with the name sitting right there.
+        self._fake({"serial_number": "TNY9", "device_name": "a Tiiny on a desk"})
+        real_api, real_host = bench.api, bench.HOST
+        try:
+            bench.api = lambda *a, **k: {"tiiny_os": "0.1.34", "ram": "80 GB"}
+            bench.HOST = "10.0.0.7"
+            got = bench.identify()
+        finally:
+            bench.api, bench.HOST = real_api, real_host
+        self.assertEqual(got["name"], "a Tiiny on a desk")
+        self.assertEqual(got["ram"], "80 GB")
+
+
 class NoEmDashes(unittest.TestCase):
     """House rule. Written as an escape so this file does not contain one."""
 
@@ -222,7 +348,8 @@ class NoEmDashes(unittest.TestCase):
         here = pathlib.Path(bench.__file__).parent
         for f in ["bench.py", "serve.py", "report.py", "static/app.html",
                   "tiiny-app.json", "tests/test_discovery.py", "README.md",
-                  ".gitignore", ".github/workflows/ci.yml"]:
+                  ".gitignore", ".github/workflows/ci.yml",
+                  ".github/page-check.mjs"]:
             n = (here / f).read_text(encoding="utf-8").count(self.EM)
             self.assertEqual(n, 0, f"{f} has {n} em dashes")
 

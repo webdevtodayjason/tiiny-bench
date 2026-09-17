@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 import os
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
@@ -256,6 +256,25 @@ def device_json(addr, timeout=0.6):
     if not isinstance(d, dict) or not d.get("serial_number"):
         return None
     return d
+
+
+DISCO_SEEN = {}    # address -> its device.json body, or {} when it said nothing
+
+
+def discovered(addr, timeout=1.5):
+    """The device.json for an address, asked once and then remembered.
+
+    A box handed over in the environment is never scanned for, so this file is
+    the only unauthenticated description of it we get. The connection panel
+    repaints on a timer and a box does not rename itself between repaints, so
+    asking once per address is enough; connect() clears this, which is what the
+    Detect again button runs.
+    """
+    if not addr:
+        return {}
+    if addr not in DISCO_SEEN:
+        DISCO_SEEN[addr] = device_json(addr, timeout=timeout) or {}
+    return DISCO_SEEN[addr]
 
 
 def _holds(addr):
@@ -572,6 +591,7 @@ def connect(host=None, serial=None, rescan=False, quiet=False):
     """
     global HOST, PORT_OVERRIDE, SOURCE, PLANE, DEVICE
     TRANSPORT.clear()
+    DISCO_SEEN.clear()
     DEVICE = {}
     env_port = os.environ.get("TIINY_PORT")
     forced_port = int(env_port) if env_port and env_port.isdigit() else None
@@ -588,7 +608,7 @@ def connect(host=None, serial=None, rescan=False, quiet=False):
             # One cheap unauthenticated request, so a result file records which
             # box it measured even when the address came from the environment
             # rather than from a scan. Harmless when it does not answer.
-            d = device_json(addr, timeout=1.5) or {}
+            d = discovered(addr)
             if d.get("serial_number"):
                 DEVICE = {"addr": addr, "plane": plane,
                           "serial": d.get("serial_number"),
@@ -712,7 +732,15 @@ def firmware(info):
 
 def identify():
     """What this device says it is. Unauthenticated where it can be, so the
-    web UI can show the user what it found before asking them for anything."""
+    web UI can show the user what it found before asking them for anything.
+
+    Management lives on port 80 and a box handed over by the launcher is not
+    always reachable there, so the discovery file on :39218 is asked for the
+    same address and fills in anything management could not answer. Without it
+    a perfectly healthy box reads as "found, unnamed" under a column of dashes.
+    A present-but-empty field counted as answered before, which is the other
+    way that column filled with dashes.
+    """
     out = {}
     d = api(mgmt("/api/v1/sys/device_info"), "probe", timeout=5)
     if "_error" not in d:
@@ -720,9 +748,10 @@ def identify():
                "os": d.get("tiiny_os"), "service": d.get("version"),
                "ram": d.get("ram"), "storage": d.get("storage"),
                "serial": d.get("sn")}
-    disco = device_json(HOST, timeout=1.5) or {}
+    disco = discovered(HOST)
     if disco:
-        out.setdefault("name", disco.get("device_name"))
+        if not out.get("name"):
+            out["name"] = disco.get("device_name")
         out["serial"] = disco.get("serial_number") or out.get("serial")
         out["transport"] = disco.get("transport")
     return {k: v for k, v in out.items() if v}

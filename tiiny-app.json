@@ -2,7 +2,7 @@
   "manifest": 1,
   "id": "tiiny-bench",
   "name": "TiinyBench",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "tagline": "Measure what your box actually does, not what the spec sheet says.",
   "description": "Prefill against prompt length, throughput over a long generation, what happens when more than one person uses the box, and what a reasoning model charges for the tokens nobody reads. Produces one self-contained HTML report you can email.",
   "author": {"name": "Jason Brashear", "github": "webdevtodayjason"},
