@@ -2,7 +2,7 @@
   "manifest": 1,
   "id": "tiiny-bench",
   "name": "TiinyBench",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "tagline": "Measure what your box actually does, not what the spec sheet says.",
   "description": "Prefill against prompt length, throughput over a long generation, what happens when more than one person uses the box, and what a reasoning model charges for the tokens nobody reads. Produces one self-contained HTML report you can email. The Chat page asks the same box a question instead of a benchmark and puts the cost under every reply: time to first token, decode rate, tokens in and out, and why generation stopped, all read off the gateway's own timings and usage.",
   "author": {
