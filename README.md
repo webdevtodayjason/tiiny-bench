@@ -38,6 +38,47 @@ is. A fast wrong answer is still wrong.
 
 ---
 
+## Chat
+
+`--serve` also opens a **Chat** page, because the fastest way to understand what a number
+means is to sit behind it. It is the same box asked a question instead of a benchmark, and
+under every reply is what that reply cost:
+
+```
+ttft 883 ms   decode 23.0 tok/s   total 4.21 s   in 34   out 74
+on My Tiiny · Ornith-1.0-35B   finish stop
+```
+
+Every one of those figures is the device's own, read off the gateway's `timings` and `usage`
+through the same `derive_stats` the benchmark uses, plus this machine's clock for the two
+wall-time figures it alone can see. A stream that fails part way reports nothing rather than
+zeroes, because "out 0" beside a turn that really streamed four hundred tokens is a lie the
+error above it already contradicts.
+
+Left of the conversation is a card for the selected model, and the last twenty conversations,
+which are kept in your browser and never leave it. Right of it is every model loaded on the
+box with its NPU units and an Unload button, the budget bar, and a Load panel that refuses in
+a sentence when a model is not installed, cannot chat, or would not fit:
+
+> Qwen3.6-35B-A3B-turbo asks for 55 NPU units and only 42 are free on My Tiiny. The device
+> would accept the load and roll it back a moment later without saying so, so it is refused
+> here.
+
+That refusal is the point of the panel. The device does not say no to a load that does not
+fit; it says yes, shows the model as loading, and drops it a moment later with no error
+anywhere. The Models page loads through the same guard, so it refuses on the same grounds.
+
+Replies render as markdown with highlighted code blocks and a Copy button, and a reasoning
+model's chain of thought sits in a collapsible block behind the Thinking toggle. Temperature,
+max tokens and a system prompt are controls on the page. Only
+`chat_template_kwargs.enable_thinking` turns reasoning on or off on this gateway: the top
+level `enable_thinking` its own OpenAPI document declares is ignored by the runtime, measured.
+
+The page is still one self-contained HTML file. No CDN, no external script, no webfont, and
+nothing a model writes reaches the page as markup.
+
+---
+
 ## It does not touch your box unless you ask
 
 By default the suite benchmarks **whatever model is already running** and loads, unloads and

@@ -235,6 +235,10 @@ button.danger{border-color:#6b2f28;color:var(--bad)}
 .budget .free{background:var(--s3);color:var(--dim);font-weight:400}
 .fits{color:var(--good)} .nofit{color:var(--bad)}
 
+.catline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;
+  font-size:11.5px;color:var(--dim)}
+.catline .stale{color:var(--bad)}
+.catline button{padding:5px 12px;font-size:11.5px}
 .empty{color:var(--dim);text-align:center;padding:34px 16px;font-size:12.5px}
 .err{color:var(--bad);padding:13px 16px;font-size:12.5px}
 input.txt{background:var(--ground);border:1px solid var(--line2);color:var(--ink);font:inherit;
@@ -254,6 +258,194 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   .navlist .sect{display:none}
   .navlist button{white-space:nowrap}
   .brand{min-width:0}
+}
+
+/* ---- chat ------------------------------------------------------------
+   The Chat page in TiinyBench's own tokens: orange is the accent and the key
+   figure, --good and --bad are load and stop states, --cool is a cache hit and
+   the model's thinking, --hot is a warning. Same monospace face and the same
+   spacing as every other page here, so it reads as part of the app. */
+/* The three columns fill the window under the page heading, so the compose box
+   sits on the fold rather than below it and the log is what scrolls. */
+.chat-grid{display:grid;gap:14px;grid-template-columns:268px minmax(0,1fr) 292px;
+  height:calc(100dvh - 262px);min-height:430px}
+.chat-side,.chat-rail{min-width:0;min-height:0;overflow-y:auto;display:flex;
+  flex-direction:column;gap:12px}
+.chat-side .card,.chat-rail .card{flex:none;min-width:0}
+.chat-main{min-width:0;min-height:0;display:flex;flex-direction:column}
+.chat-bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+.chat-bar label.lab{display:flex;flex-direction:column;gap:5px}
+.chat-bar label.grow{flex:1;min-width:210px}
+.chat-bar select.txt{background:var(--ground);border:1px solid var(--line2);color:var(--ink);
+  font:inherit;font-size:12.5px;padding:8px 10px;border-radius:5px;min-width:200px;max-width:320px}
+.chat-bar select.txt:focus{outline:none;border-color:var(--orange)}
+.chat-bar input.txt{font-size:12.5px;padding:8px 10px}
+.chat-bar input[type=number].txt{width:88px}
+.chat-bar input[type=text].txt{width:100%}
+.chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--steel);
+  padding-bottom:9px;cursor:pointer;white-space:nowrap}
+.chk input{accent-color:var(--orange);width:14px;height:14px;cursor:pointer}
+.chat-route{font-size:11.5px;color:var(--dim);padding-bottom:10px;text-wrap:pretty}
+.chat-route .linklike{background:none;border:0;padding:0;font:inherit;color:var(--orange);
+  cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.chat-log{flex:1;min-height:220px;overflow-y:auto;background:var(--s1);
+  border:1px solid var(--line);border-radius:7px;padding:16px 18px}
+.chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;text-align:center;gap:13px}
+.chat-empty[hidden]{display:none}
+.chat-empty-mark{font-size:32px;color:var(--orange);opacity:.55}
+.chat-empty p{max-width:44ch;color:var(--steel);font-size:12px;line-height:1.7;text-wrap:pretty}
+.chat-empty code{color:var(--hot)}
+.chat-compose{display:flex;gap:10px;align-items:flex-end;margin-top:12px}
+.chat-compose textarea{flex:1;background:var(--ground);border:1px solid var(--line2);
+  color:var(--ink);font:inherit;font-size:13px;padding:10px 12px;border-radius:5px;
+  resize:vertical;min-height:44px;line-height:1.5}
+.chat-compose textarea:focus{outline:none;border-color:var(--orange)}
+
+.turn{margin-bottom:19px}
+.turn-who{font-size:10px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px}
+.turn.user .turn-who{color:var(--cool)}
+.turn.assistant .turn-who{color:var(--orange)}
+.turn-body{font-size:13px;line-height:1.72;white-space:pre-wrap;word-break:break-word}
+.turn-body.turn-md{white-space:normal}
+.turn-md p{margin:0 0 9px}
+.turn-md p:last-child{margin-bottom:0}
+.turn-md ul,.turn-md ol{margin:0 0 10px;padding-left:22px}
+.turn-md li{margin:2px 0}
+.turn-md strong{color:#fff;font-weight:600}
+.turn-md em{font-style:italic}
+.turn-md del{color:var(--dim)}
+.chat-h{margin:15px 0 7px;font-weight:600;letter-spacing:-.02em;color:var(--ink);font-size:13.5px}
+.chat-h:first-child{margin-top:0}
+.chat-link{color:var(--orange);word-break:break-all;text-decoration:none;
+  border-bottom:1px solid transparent}
+.chat-link:hover{border-bottom-color:var(--orange)}
+.inline-code{background:var(--s3);border:1px solid var(--line);border-radius:3px;
+  padding:1px 5px;font-size:12px;color:var(--hot)}
+.code-block-wrapper{border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  margin:10px 0;background:var(--ground)}
+.code-block-header{display:flex;align-items:center;justify-content:space-between;
+  padding:6px 11px;background:var(--s2);border-bottom:1px solid var(--line)}
+.code-block-lang{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.code-copy-btn{background:none;border:1px solid var(--line2);color:var(--steel);font:inherit;
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;
+  border-radius:4px;cursor:pointer}
+.code-copy-btn:hover{border-color:var(--orange);color:var(--orange)}
+.code-copy-btn.copied{border-color:var(--good);color:var(--good)}
+.code-block{padding:11px 13px;overflow-x:auto;font-size:12px;line-height:1.6;color:var(--ink)}
+.code-block code{font:inherit;color:inherit;white-space:pre;display:block}
+.tok-com{color:var(--dim);font-style:italic}
+.tok-str{color:var(--cool)}
+.tok-kw{color:var(--orange)}
+.tok-fn{color:var(--hot)}
+.tok-num{color:var(--good)}
+.tok-key{color:var(--orange)}
+.tok-var{color:var(--cool)}
+.tok-tag{color:var(--orange)}
+.tok-attr{color:var(--hot)}
+
+.turn-think{margin-bottom:9px;border-left:2px solid var(--cool);padding-left:11px}
+.turn-think[hidden]{display:none}
+.turn-think>summary{cursor:pointer;list-style:none;font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--cool);font-variant-numeric:tabular-nums}
+.turn-think>summary::-webkit-details-marker{display:none}
+.turn-think>summary::before{content:'\25B8  '}
+.turn-think[open]>summary::before{content:'\25BE  '}
+.turn-think-body{margin-top:7px;font-size:12px;line-height:1.65;color:var(--steel);
+  white-space:pre-wrap;word-break:break-word}
+.turn-err{color:var(--bad);font-size:12.5px;text-wrap:pretty}
+.turn-err-tail{margin-top:9px}
+.turn-note{color:var(--dim);font-size:12.5px;text-wrap:pretty}
+
+.stats-bar{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.stat-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+  background:var(--s2);border-radius:4px;padding:2px 8px;font-size:10px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--dim);font-variant-numeric:tabular-nums}
+.stat-chip b{color:var(--orange);font-weight:600;letter-spacing:0;text-transform:none;
+  font-size:11px}
+.stat-chip.cool b{color:var(--cool)}
+.stat-chip.warn{border-color:#5c3d12}
+.stat-chip.warn b{color:var(--hot)}
+.stat-chip.bad{border-color:#6b2f28}
+.stat-chip.bad b{color:var(--bad)}
+
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:11px;margin:0}
+.kv dt{color:var(--dim)}
+.kv dd{color:var(--ink);word-break:break-word;margin:0}
+.model-desc{margin-top:11px;font-size:11.5px;line-height:1.6;color:var(--steel);
+  max-height:118px;overflow-y:auto;overflow-wrap:anywhere;text-wrap:pretty}
+.model-where{display:flex;flex-direction:column;gap:4px;margin-top:11px}
+.model-where-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.model-where-row .meta{margin-left:auto;font-size:10px;color:var(--dim)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none}
+.dot.off{background:var(--dim)}
+.card-link{display:inline-block;margin-top:11px;font-size:11.5px;color:var(--orange);
+  text-decoration:none;border-bottom:1px solid transparent}
+.card-link:hover{border-bottom-color:var(--orange)}
+.card-note{font-size:11.5px;color:var(--dim);text-wrap:pretty}
+
+.conv-list{display:flex;flex-direction:column;gap:2px;max-height:252px;overflow-y:auto;
+  padding:8px}
+.conv-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid transparent;
+  border-radius:5px;cursor:pointer}
+.conv-item:hover{background:var(--s2);border-color:var(--line)}
+.conv-item.active{background:#1a1410;border-color:var(--orange)}
+.conv-item-content{min-width:0;flex:1}
+.conv-item-title{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.conv-item-date{font-size:9.5px;color:var(--dim);margin-top:2px}
+.conv-delete{background:none;border:0;color:var(--dim);font-size:15px;line-height:1;
+  cursor:pointer;padding:2px 5px}
+.conv-delete:hover{color:var(--bad)}
+.conv-empty{font-size:11.5px;color:var(--dim);padding:6px 2px}
+
+.rail-device{margin-bottom:11px}
+.rail-device-head{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--steel);
+  margin-bottom:6px}
+.rail-device-head b{margin-left:auto;color:var(--ink);font-weight:600;
+  font-variant-numeric:tabular-nums}
+.instance-card{background:var(--ground);border:1px solid var(--line);
+  border-left:3px solid var(--good);border-radius:5px;padding:10px 11px;margin-top:9px}
+.instance-card.loading{border-left-color:var(--hot)}
+.instance-model{font-size:11.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.instance-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:6px;
+  font-size:9.5px;color:var(--dim)}
+.instance-footer{display:flex;align-items:center;justify-content:space-between;margin-top:9px}
+.instance-status{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--good)}
+.instance-status.loading{color:var(--hot)}
+.instance-delete{background:none;border:1px solid var(--line2);color:var(--steel);font:inherit;
+  font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;padding:3px 9px;
+  border-radius:4px;cursor:pointer}
+.instance-delete:hover{border-color:var(--bad);color:var(--bad)}
+.instances-empty{font-size:11.5px;color:var(--dim);text-wrap:pretty}
+.load-where{font-size:11px;color:var(--steel);margin-bottom:10px;display:flex;
+  align-items:center;gap:7px}
+.load-hint{font-size:11.5px;color:var(--dim);margin:10px 0 12px;line-height:1.6;
+  text-wrap:pretty}
+.load-hint.warn{color:#e8c89a}
+#load-model{width:100%}
+
+.toast{position:fixed;right:20px;bottom:20px;z-index:80;background:var(--s2);
+  border:1px solid var(--line2);border-left:3px solid var(--orange);border-radius:6px;
+  padding:11px 15px;font-size:12.5px;color:var(--ink);max-width:min(400px,80vw);
+  box-shadow:0 12px 32px #0009;text-wrap:pretty}
+.toast.bad{border-left-color:var(--bad)}
+.toast[hidden]{display:none}
+
+@media (max-width:1240px){
+  .chat-grid{grid-template-columns:240px minmax(0,1fr);height:auto}
+  .chat-rail{flex-direction:row;flex-wrap:wrap;grid-column:1/-1}
+  .chat-rail .card{flex:1 1 280px}
+  .chat-log{height:min(52dvh,540px)}
+}
+@media (max-width:900px){
+  .chat-grid{grid-template-columns:1fr}
+  .chat-side{flex-direction:row;flex-wrap:wrap}
+  .chat-side .card{flex:1 1 240px;max-width:100%}
+  .chat-bar select.txt{min-width:0;width:100%;max-width:none}
+  .chat-bar label.lab{flex:1 1 130px}
+  .chat-route{flex-basis:100%;padding-bottom:0}
 }
 
 /* ---- confirm dialog -------------------------------------------------- */
@@ -279,6 +471,7 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <div class="sect">Measure</div>
     <button data-p="dash" aria-current="page"><span class="ico">▦</span>Dashboard</button>
     <button data-p="run"><span class="ico">▶</span>Run Benchmark</button>
+    <button data-p="chat"><span class="ico">◈</span>Chat</button>
     <button data-p="board"><span class="ico">▤</span>Leaderboard</button>
     <div class="sect">Plan</div>
     <button data-p="fit"><span class="ico">◈</span>Can I Run It?</button>
@@ -391,6 +584,73 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   </div>
 </section>
 
+<!-- ================= CHAT ================= -->
+<section class="page" id="p-chat">
+  <div class="head">
+    <div>
+      <h2>Chat</h2>
+      <p>The same box, asked a question instead of a benchmark. Under every reply is what
+         it cost, read off the device's own timings and usage rather than a clock in this
+         browser.</p>
+    </div>
+    <div class="right"><button class="ghost" id="new-chat" type="button">New chat</button></div>
+  </div>
+
+  <div class="chat-grid">
+    <aside class="chat-side">
+      <div class="card"><div class="hd">Model card</div>
+        <div class="bd" id="model-card"><div class="card-note">reading the box…</div></div></div>
+      <div class="card"><div class="hd">Conversations <span class="r" id="conv-count"></span></div>
+        <div class="conv-list" id="conversation-list"></div></div>
+    </aside>
+
+    <div class="chat-main">
+      <div class="chat-bar">
+        <label class="lab">Model<select class="txt" id="chat-model"></select></label>
+        <label class="lab">Temperature<input class="txt" id="chat-temp" type="number"
+               min="0" max="2" step="0.1" value="0.7"></label>
+        <label class="lab">Max tokens<input class="txt" id="chat-max-tokens" type="number"
+               min="16" max="8192" step="16" value="700"></label>
+        <label class="chk"><input type="checkbox" id="chat-stream" checked>Stream</label>
+        <label class="chk"><input type="checkbox" id="chat-thinking" checked>Thinking</label>
+      </div>
+      <div class="chat-bar">
+        <label class="lab grow">System prompt<input class="txt" id="chat-system" type="text"
+               placeholder="optional, sent ahead of the conversation"></label>
+        <span class="chat-route" id="chat-route"></span>
+      </div>
+      <div class="chat-log" id="chat-log">
+        <div class="chat-empty" id="chat-empty">
+          <div class="chat-empty-mark">◈</div>
+          <p>This page posts to <code>/api/chat</code> on this app, which sends
+             <code>/v1/chat/completions</code> to your Tiiny and hands back the same numbers
+             the benchmark measures. The picker lists only models that can chat and are
+             loaded right now, so a speech or embedding model never turns up here.</p>
+        </div>
+        <div id="chat-turns"></div>
+      </div>
+      <form class="chat-compose" id="chat-form">
+        <textarea id="chat-input" rows="2" placeholder="Ask the box something…"></textarea>
+        <button class="go" id="chat-send" type="submit">Send</button>
+      </form>
+    </div>
+
+    <aside class="chat-rail">
+      <div class="card"><div class="hd">Loaded <span class="r" id="instances-count"></span></div>
+        <div class="bd"><div id="instances-devices"></div><div id="instances-list"></div></div></div>
+      <div class="card"><div class="hd">Load a model</div><div class="bd">
+        <div class="load-where" id="load-device"></div>
+        <label class="lab" style="display:flex;flex-direction:column;gap:5px">Model
+          <select class="txt" id="load-model" style="background:var(--ground);
+                  border:1px solid var(--line2);color:var(--ink);font:inherit;font-size:12.5px;
+                  padding:8px 10px;border-radius:5px"></select></label>
+        <p class="load-hint" id="load-hint"></p>
+        <button class="go" id="load-btn" type="button">Load</button>
+      </div></div>
+    </aside>
+  </div>
+</section>
+
 <!-- ================= LEADERBOARD ================= -->
 <section class="page" id="p-board">
   <div class="head"><div><h2>Leaderboard</h2>
@@ -425,6 +685,7 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <div class="right"><button class="ghost danger" id="unloadall">Unload all</button></div></div>
 
   <div class="grid" id="mstats"></div>
+  <div class="catline" id="mcatline"></div>
   <div class="err" id="mgerr" hidden style="margin-top:14px"></div>
 
   <div style="margin-top:24px">
@@ -503,6 +764,8 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 </section>
 </main>
 
+<div class="toast" id="toast" hidden></div>
+
 <div class="scrim" id="scrim" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mdt">
     <h4 id="mdt">Are you sure?</h4>
@@ -577,6 +840,7 @@ function go(p){
   if (location.hash !== '#'+p) location.hash = p;
   if (p==='board') board().then(function(){ drawCoverage(); }); if (p==='fit') fit(); if (p==='models') models();
   if (p==='history') history_(); if (p==='dash') dash();
+  if (p==='chat') chatEnter();
 }
 $('nav').addEventListener('click', function(e){
   var b=e.target.closest('button[data-p]'); if(b) go(b.getAttribute('data-p'));
@@ -802,9 +1066,37 @@ function mgStat(){
     stat('&#9650;', (t.npu_util_pct==null?'&mdash;':t.npu_util_pct.toFixed(0)+'<small>%</small>'),
          'NPU utilisation', 'right now, not averaged') +
     stat('&#9636;', (d.running||[]).length+'<small> loaded</small>', 'models resident',
-         (d.installed||[]).length+' on disk, '+(d.online||[]).length+' in the catalogue') +
+         (d.installed||[]).length+' on disk, '+(d.online_error
+           ? 'catalogue unread' : (d.online||[]).length+' in the catalogue')) +
     stat('&#9638;', (st.free==null?'&mdash;':(st.free/1e9).toFixed(0)+'<small>GB</small>'), 'disk free',
          st.total? (st.used/1e9).toFixed(0)+' GB of '+(st.total/1e9).toFixed(0)+' GB used':'');
+  mgCatLine();
+}
+/* Nothing about the catalogue is pinned: it is read off the box on every call
+   to /api/manage. Say when, and when the box did not answer say that instead
+   of printing a zero that reads as an empty store. */
+function mgCatLine(){
+  var d=S.mg, line=$('mcatline');
+  line.textContent='';
+  if(!d) return;
+  if(d.online_error){
+    line.appendChild(el('span','stale',
+      'the box did not answer for the catalogue: '+d.online_error));
+  } else {
+    var n=(d.online||[]).length;
+    var when=d.online_read_at? new Date(d.online_read_at) : null;
+    line.appendChild(el('span', null, 'catalogue: '+n+' entr'+(n===1?'y':'ies')
+      +(when && !isNaN(when) ? ', read from the box at '
+        +when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}) : '')));
+  }
+  var again=el('button','ghost','Refresh');
+  again.type='button';
+  again.onclick=function(){
+    again.disabled=true;
+    again.textContent='Reading\u2026';
+    models().then(function(){ /* mgCatLine redraws the row, button and all */ });
+  };
+  line.appendChild(again);
 }
 function models(){
   return j('/api/manage').then(function(d){
@@ -1291,11 +1583,914 @@ $('connkeysave').addEventListener('click', function(){
   connPost({key:k},'connkeyerr').then(function(ok){ if(ok) $('connkey').value=''; });
 });
 
+/* =====================================================================
+   CHAT
+   Ported from AINode Pocket 0.1.3 (web/app.js, web/app.css), adapted from a
+   fleet to the one box TiinyBench is pointed at: wherever Pocket iterates
+   devices this iterates a single entry and the device chooser is a label.
+   Every number under a reply is the server's, read off the gateway's own
+   timings and usage. Nothing here is measured in the browser, and no model
+   output ever reaches innerHTML unescaped.
+   ===================================================================== */
+var CONV_KEY = 'tiiny_bench_chats';
+var CONV_LIMIT = 20;
+var conversations = [], currentConv = null, live = null;
+var cardModel = null, chatBusy = false, railDevice = null;
+var loadShape = '', instanceWatch = null, toastTimer = null;
+
+function el(tag, cls, text){
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = text;
+  return n;
+}
+function escAttr(s){ return esc(s).replace(/"/g, '&quot;'); }
+function gb(n){ return ((Number(n)||0)/1e9).toFixed(1) + ' GB'; }
+function toast(message, bad){
+  var t = $('toast');
+  t.textContent = message;
+  t.className = 'toast' + (bad ? ' bad' : '');
+  t.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.hidden = true; }, bad ? 7000 : 3500);
+}
+/* j() is enough for a route that always answers 200. These ones answer 400,
+   404, 409, 502 and 503 with a sentence, and the sentence is the product. */
+function api(path, opts){
+  var o = opts || {}, init = {method: o.method || 'GET'};
+  if (o.body){ init.headers = {'Content-Type':'application/json'};
+               init.body = JSON.stringify(o.body); }
+  return fetch(path, init).then(function(r){
+    return r.text().then(function(text){
+      var d = {};
+      try { d = JSON.parse(text); } catch (e) { d = {}; }
+      if (!r.ok) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+      return d;
+    });
+  });
+}
+
+/* ---- markdown and highlighting ---------------------------------------
+   Everything the model wrote is escaped before any tag is assembled: code
+   spans and links are pulled out into slots, the remainder goes through the
+   text-node escaper, and only then is markup added. The slots are rejoined
+   last, so no path exists for model output to reach innerHTML unescaped.
+   The slot marker is U+0001, stripped from the model's text first so a model
+   cannot write one and address a slot of its own. */
+function renderMarkdown(text){
+  if (!text) return '';
+  var MARK = String.fromCharCode(1);
+  var slots = [];
+  var src = String(text).split(MARK).join('');
+  src = src.replace(/```([A-Za-z0-9+#_.-]*)[ \t]*\r?\n?([\s\S]*?)```/g,
+    function(m, lang, code){
+      slots.push(codeBlock(lang, code.replace(/\n$/, '')));
+      return MARK + 'B' + (slots.length - 1) + MARK;
+    });
+  /* A fence that has not closed yet is a block still streaming in, so it is
+     rendered as code rather than left on screen as literal backticks. */
+  src = src.replace(/```([A-Za-z0-9+#_.-]*)[ \t]*\r?\n?([\s\S]*)$/,
+    function(m, lang, code){
+      slots.push(codeBlock(lang, code));
+      return MARK + 'B' + (slots.length - 1) + MARK;
+    });
+  src = src.replace(/`([^`\n]+)`/g, function(m, code){
+    slots.push('<code class="inline-code">' + esc(code) + '</code>');
+    return MARK + 'I' + (slots.length - 1) + MARK;
+  });
+  src = src.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, function(m, label, url){
+    slots.push('<a class="chat-link" target="_blank" rel="noopener noreferrer" href="'
+               + escAttr(url) + '">' + esc(label) + '</a>');
+    return MARK + 'I' + (slots.length - 1) + MARK;
+  });
+  var html = esc(src);
+  html = html.replace(/(https?:\/\/[^\s<]+[^\s<.,;:?!)])/g, function(url){
+    return '<a class="chat-link" target="_blank" rel="noopener noreferrer" href="'
+           + url.replace(/"/g, '&quot;') + '">' + url + '</a>';
+  });
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+             .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+             .replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  html = markdownBlocks(html);
+  return html.replace(new RegExp(MARK + '([BI])(\\d+)' + MARK, 'g'),
+    function(m, kind, i){ return slots[Number(i)] || ''; });
+}
+/* Headings, lists and paragraphs, walked line by line so a list is a real list
+   and a blank line ends a paragraph rather than stacking <br>. */
+function markdownBlocks(html){
+  var MARK = String.fromCharCode(1);
+  var blockOnly = new RegExp('^' + MARK + 'B\\d+' + MARK + '$');
+  var lines = html.split('\n'), out = [], para = [], items = null, itemTag = null;
+  function flushPara(){ if(para.length){ out.push('<p>'+para.join('<br>')+'</p>'); para=[]; } }
+  function flushList(){
+    if (items) out.push('<'+itemTag+'>'+items.join('')+'</'+itemTag+'>');
+    items = null; itemTag = null;
+  }
+  for (var i=0;i<lines.length;i++){
+    var line = lines[i].replace(/\s+$/, ''), trimmed = line.trim();
+    if (!trimmed){ flushPara(); flushList(); continue; }
+    if (blockOnly.test(trimmed)){ flushPara(); flushList(); out.push(trimmed); continue; }
+    var heading = /^(#{1,5})\s+(.*)$/.exec(trimmed);
+    if (heading){
+      flushPara(); flushList();
+      var level = Math.min(heading[1].length + 1, 5);
+      out.push('<h'+level+' class="chat-h">'+heading[2]+'</h'+level+'>');
+      continue;
+    }
+    if (/^([-*_])(?:\s*\1){2,}$/.test(trimmed)){ flushPara(); flushList(); continue; }
+    var bullet = /^[-*+]\s+(.*)$/.exec(trimmed), number = /^(\d+)[.)]\s+(.*)$/.exec(trimmed);
+    if (bullet || number){
+      flushPara();
+      var tag = bullet ? 'ul' : 'ol';
+      if (items && itemTag !== tag) flushList();
+      if (!items){ items = []; itemTag = tag; }
+      items.push('<li>' + (bullet ? bullet[1] : number[2]) + '</li>');
+      continue;
+    }
+    flushList();
+    para.push(trimmed);
+  }
+  flushPara(); flushList();
+  return out.join('');
+}
+function codeBlock(lang, code){
+  var label = String(lang||'').toLowerCase().replace(/[^a-z0-9+#_.-]/g,'') || 'text';
+  return '<div class="code-block-wrapper"><div class="code-block-header">'
+    + '<span class="code-block-lang">' + esc(label) + '</span>'
+    + '<button class="code-copy-btn" type="button">Copy</button></div>'
+    + '<pre class="code-block"><code class="language-' + esc(label) + '">'
+    + highlight(code, label) + '</code></pre></div>';
+}
+/* A small in-house tokeniser: no library, no CDN. A language it does not know
+   is escaped and left alone rather than guessed at. */
+var HL_ALIAS = {py:'python',python3:'python',js:'javascript',jsx:'javascript',
+  ts:'javascript',typescript:'javascript',node:'javascript',sh:'bash',shell:'bash',
+  zsh:'bash',console:'bash',yml:'yaml',htm:'html',xml:'html',svg:'html'};
+var HL_RULES = {
+  python:[
+    ['str',/(?:[rbuf]{0,2})(?:"{3}[\s\S]*?"{3}|'{3}[\s\S]*?'{3}|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/],
+    ['com',/#[^\n]*/],
+    ['kw',/\b(?:def|class|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|import|from|as|with|try|except|finally|raise|yield|lambda|pass|break|continue|global|nonlocal|assert|del|async|await|self)\b/],
+    ['fn',/\b(?:print|len|range|str|int|float|dict|list|set|tuple|open|enumerate|zip|sum|min|max|abs|round|sorted|isinstance|getattr|setattr|json|time)\b/],
+    ['num',/\b\d[\d_]*(?:\.\d+)?(?:[eE][-+]?\d+)?\b/]],
+  javascript:[
+    ['str',/(?:"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)/],
+    ['com',/\/\/[^\n]*|\/\*[\s\S]*?\*\//],
+    ['kw',/\b(?:var|let|const|function|return|if|else|for|while|do|break|continue|new|this|typeof|instanceof|null|undefined|true|false|class|extends|import|export|from|async|await|try|catch|finally|throw|switch|case|default|in|of)\b/],
+    ['fn',/\b(?:console|document|window|JSON|Math|Object|Array|Promise|fetch|setTimeout|parseInt|parseFloat)\b/],
+    ['num',/\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b/]],
+  bash:[
+    ['str',/(?:"(?:\\.|[^"\\])*"|'[^']*')/],
+    ['com',/#[^\n]*/],
+    ['var',/\$\{[^}\n]*\}|\$[A-Za-z_][\w]*/],
+    ['kw',/\b(?:if|then|else|elif|fi|for|while|do|done|case|esac|function|return|export|local|source|set|echo|cd|exit)\b/],
+    ['fn',/\b(?:python3|python|curl|git|grep|sed|awk|jq|make|npm|node|pip3|pip)\b/],
+    ['num',/\b\d+\b/]],
+  json:[
+    ['key',/"(?:\\.|[^"\\])*"(?=\s*:)/],
+    ['str',/"(?:\\.|[^"\\])*"/],
+    ['kw',/\b(?:true|false|null)\b/],
+    ['num',/-?\b\d+(?:\.\d+)?(?:[eE][-+]?\d+)?\b/]],
+  html:[
+    ['com',/<!--[\s\S]*?-->/],
+    ['str',/"[^"\n]*"|'[^'\n]*'/],
+    ['tag',/<\/?[A-Za-z][\w:-]*|\/?>/],
+    ['attr',/\b[A-Za-z-]+(?=\s*=)/]],
+  css:[
+    ['com',/\/\*[\s\S]*?\*\//],
+    ['str',/"[^"\n]*"|'[^'\n]*'/],
+    ['kw',/@[\w-]+|--[\w-]+/],
+    ['attr',/[-a-zA-Z]+(?=\s*:)/],
+    ['num',/-?\b\d*\.?\d+(?:px|em|rem|%|vh|vw|s|ms|deg)?\b|#[0-9a-fA-F]{3,8}\b/]],
+  yaml:[
+    ['com',/#[^\n]*/],
+    ['str',/"[^"\n]*"|'[^'\n]*'/],
+    ['key',/^[ \t-]*[\w.-]+(?=\s*:)/],
+    ['num',/\b\d+(?:\.\d+)?\b/]]
+};
+var hlCache = {};
+function hlRegex(name, rules){
+  if (hlCache[name]) return hlCache[name];
+  hlCache[name] = new RegExp(rules.map(function(r){ return '('+r[1].source+')'; }).join('|'), 'gm');
+  return hlCache[name];
+}
+function highlight(code, lang){
+  var name = HL_ALIAS[lang] || lang, rules = HL_RULES[name];
+  if (!rules) return esc(code);
+  var re = hlRegex(name, rules);
+  re.lastIndex = 0;
+  var out = '', last = 0, match;
+  while ((match = re.exec(code)) !== null){
+    if (!match[0]){ re.lastIndex++; continue; }
+    if (match.index > last) out += esc(code.slice(last, match.index));
+    var cls = rules[0][0];
+    for (var g=1; g<match.length; g++){ if (match[g] !== undefined){ cls = rules[g-1][0]; break; } }
+    out += '<span class="tok-'+cls+'">' + esc(match[0]) + '</span>';
+    last = match.index + match[0].length;
+  }
+  return out + esc(code.slice(last));
+}
+
+/* ---- conversations, kept in this browser ------------------------------
+   The last twenty, with the stats bar of every answer saved alongside its
+   text. A benchmark you cannot reread is not much of a benchmark. */
+function readConversations(){
+  try {
+    var saved = JSON.parse(localStorage.getItem(CONV_KEY) || '[]');
+    conversations = (saved instanceof Array) ? saved.slice(0, CONV_LIMIT) : [];
+  } catch (e) { conversations = []; }
+}
+function writeConversations(){
+  if (conversations.length > CONV_LIMIT) conversations.length = CONV_LIMIT;
+  try { localStorage.setItem(CONV_KEY, JSON.stringify(conversations)); }
+  catch (e) { /* a full or blocked store is not worth a toast mid-answer */ }
+}
+function newConversation(){
+  currentConv = {id:'conv_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+                 title:'New chat', created_at:Date.now(),
+                 model:$('chat-model').value||'', messages:[]};
+  conversations.unshift(currentConv);
+  if (conversations.length > CONV_LIMIT) conversations.length = CONV_LIMIT;
+  writeConversations(); renderConversation(); renderConvList();
+}
+function openConversation(id){
+  conversations.forEach(function(c){ if (c.id === id) currentConv = c; });
+  if (currentConv && currentConv.model){
+    var sel = $('chat-model');
+    for (var i=0;i<sel.options.length;i++){
+      if (sel.options[i].value === currentConv.model){ sel.value = currentConv.model; break; }
+    }
+    chatModelChanged();
+  }
+  renderConversation(); renderConvList();
+}
+function dropConversation(id){
+  conversations = conversations.filter(function(c){ return c.id !== id; });
+  if (currentConv && currentConv.id === id) currentConv = null;
+  writeConversations(); renderConversation(); renderConvList();
+}
+function saveCurrent(){
+  if (!currentConv) return;
+  currentConv.model = $('chat-model').value || currentConv.model;
+  for (var i=0;i<currentConv.messages.length;i++){
+    var m = currentConv.messages[i];
+    if (m.role === 'user'){
+      currentConv.title = m.content.slice(0,34) + (m.content.length>34 ? '…' : '');
+      break;
+    }
+  }
+  writeConversations();
+}
+function renderConvList(){
+  var list = $('conversation-list');
+  list.textContent = '';
+  $('conv-count').textContent = conversations.length ? conversations.length + ' kept' : '';
+  if (!conversations.length){
+    list.appendChild(el('div','conv-empty','No conversations yet.'));
+    return;
+  }
+  conversations.forEach(function(conv){
+    var row = el('div','conv-item'+(currentConv && conv.id===currentConv.id ? ' active':''));
+    var body = el('div','conv-item-content');
+    body.appendChild(el('div','conv-item-title', conv.title || 'New chat'));
+    var when = new Date(conv.created_at);
+    body.appendChild(el('div','conv-item-date',
+      when.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + '  ' +
+      when.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})));
+    row.appendChild(body);
+    var kill = el('button','conv-delete','×');
+    kill.type = 'button'; kill.title = 'Delete';
+    kill.onclick = function(ev){ ev.stopPropagation(); dropConversation(conv.id); };
+    row.appendChild(kill);
+    row.onclick = function(){ openConversation(conv.id); };
+    list.appendChild(row);
+  });
+}
+
+/* ---- turns, the thinking block and the stats bar ---------------------- */
+function renderConversation(){
+  var turns = $('chat-turns');
+  turns.textContent = '';
+  var messages = currentConv ? currentConv.messages : [];
+  $('chat-empty').hidden = messages.length > 0;
+  messages.forEach(function(m){ turns.appendChild(messageNode(m)); });
+  var log = $('chat-log');
+  log.scrollTop = log.scrollHeight;
+}
+function messageNode(msg){
+  var box = el('div','turn ' + (msg.role==='user' ? 'user' : 'assistant'));
+  box.appendChild(el('div','turn-who', msg.role==='user' ? 'you' : sh(msg.model||'assistant')));
+  if (msg.role === 'user'){
+    var mine = el('div','turn-body');
+    mine.textContent = msg.content;
+    box.appendChild(mine);
+    return box;
+  }
+  var think = el('details','turn-think');
+  var summary = el('summary', null, 'thinking');
+  var thinkBody = el('div','turn-think-body');
+  think.appendChild(summary); think.appendChild(thinkBody);
+  think.__summary = summary; think.__body = thinkBody;
+  box.appendChild(think);
+  var body = el('div','turn-body turn-md');
+  /* Its own line under the answer, because a stream that died part way has
+     both an answer and an error and they are not the same thing. */
+  var oops = el('div','turn-err turn-err-tail');
+  oops.hidden = true;
+  var stats = el('div','stats-slot');
+  box.appendChild(body); box.appendChild(oops); box.appendChild(stats);
+  box.__think = think; box.__body = body; box.__err = oops; box.__stats = stats;
+  paintMessage(box, msg);
+  return box;
+}
+function paintMessage(box, msg){
+  var think = box.__think;
+  if (msg.reasoning){
+    think.hidden = false;
+    think.__body.textContent = msg.reasoning;
+    /* Under fifty milliseconds there is no tenth of a second to print, and
+       "thinking, 0.0 s" reads as a measurement of nothing rather than as the
+       bare label the code already has for a duration nobody timed. */
+    think.__summary.textContent = Number(msg.think_s) >= 0.05
+      ? 'thinking, ' + Number(msg.think_s).toFixed(1) + ' s' : 'thinking';
+  } else { think.hidden = true; }
+  if (msg.error && !msg.content){
+    box.__body.className = 'turn-body turn-err';
+    box.__body.textContent = msg.error;
+  } else if (!msg.content && msg.note){
+    /* An empty answer is a result, not a blank bubble: say what happened. */
+    box.__body.className = 'turn-body turn-note';
+    box.__body.textContent = msg.note;
+  } else {
+    box.__body.className = 'turn-body turn-md';
+    box.__body.innerHTML = renderMarkdown(msg.content);
+  }
+  /* The gateway's timeout sentence ends "the tokens already streamed above are
+     real", and overwriting the answer with it left nothing above for it to
+     point at. When both exist, both are shown. */
+  box.__err.hidden = !(msg.error && msg.content);
+  if (msg.error && msg.content) box.__err.textContent = msg.error;
+  box.__stats.textContent = '';
+  if (msg.stats){
+    box.__stats.appendChild(statsBar(msg.stats));
+  } else if (msg.stats_missing){
+    /* The route promises stats on both paths. When none arrive, show the hole
+       rather than filling it with numbers the browser guessed. */
+    var missing = el('div','stats-bar');
+    missing.appendChild(chip('stats','none returned','warn'));
+    box.__stats.appendChild(missing);
+  }
+}
+function millis(value){
+  if (value === undefined || value === null || isNaN(Number(value))) return '-';
+  var ms = Number(value);
+  return ms < 1000 ? Math.round(ms)+' ms' : (ms/1000).toFixed(2)+' s';
+}
+function chip(label, value, kind, title){
+  var span = el('span','stat-chip' + (kind ? ' '+kind : ''), label);
+  span.appendChild(el('b', null, value));
+  if (title) span.title = title;
+  return span;
+}
+/* Every figure here is the server's, read off the gateway's own timings and
+   usage on the final chunk plus the server's clock. Nothing is measured in
+   this browser, and a field the device never sent prints a dash. */
+function statsBar(stats){
+  var bar = el('div','stats-bar');
+  var where = (stats.device && (stats.device.name || stats.device.id)) || 'unknown device';
+  if (stats.model) where += ' · ' + sh(stats.model);
+  bar.appendChild(chip('ttft', millis(stats.ttft_ms), null,
+    'prefill ' + millis(stats.prefill_ms) +
+    (stats.prefill_tok_s ? ' at ' + Number(stats.prefill_tok_s).toFixed(1) + ' tok/s' : '')));
+  bar.appendChild(chip('decode', stats.decode_tok_s
+    ? Number(stats.decode_tok_s).toFixed(1)+' tok/s' : '-'));
+  bar.appendChild(chip('total', millis(stats.total_ms)));
+  bar.appendChild(chip('in', stats.prompt_tokens === undefined || stats.prompt_tokens === null
+    ? '-' : String(stats.prompt_tokens)));
+  if (stats.cached_tokens) bar.appendChild(chip('cached', String(stats.cached_tokens), 'cool'));
+  bar.appendChild(chip('out', stats.out_tokens === undefined || stats.out_tokens === null
+    ? '-' : String(stats.out_tokens)));
+  bar.appendChild(chip('on', where));
+  /* "length" is not a footnote on a reasoning model: it means the answer was
+     cut off, and on this firmware a modest cap is spent entirely on thinking.
+     The label is the field, finish_reason, rather than one of its two values,
+     which is what had the commonest answer reading "stop stop". */
+  bar.appendChild(chip('finish', stats.finish_reason || '-',
+    stats.finish_reason === 'length' ? 'warn' : null,
+    stats.finish_reason === 'length'
+      ? 'the token budget ran out before the model finished' : ''));
+  return bar;
+}
+
+/* ---- the model picker and the model card ------------------------------ */
+function chatModels(){
+  return S.cat.filter(function(m){ return CHAT[m.type] && S.live.indexOf(m.id) >= 0; });
+}
+function fillChatModels(){
+  var select = $('chat-model'), previous = select.value, note = $('chat-route');
+  var rows = chatModels();
+  select.textContent = ''; note.textContent = '';
+  if (!rows.length){
+    select.appendChild(el('option', null, 'no chat model loaded'));
+    select.disabled = true;
+    note.appendChild(document.createTextNode(
+      'No chat model is loaded, so there is nothing here to talk to. Load one on the '));
+    var link = el('button','linklike','Models page');
+    link.type = 'button';
+    link.onclick = function(){ go('models'); };
+    note.appendChild(link);
+    note.appendChild(document.createTextNode(', or in the panel on the right.'));
+    cardModel = null;
+    $('model-card').textContent = '';
+    $('model-card').appendChild(el('div','card-note','No model selected.'));
+    return;
+  }
+  select.disabled = false;
+  rows.forEach(function(row){
+    var option = el('option', null, row.id);
+    option.value = row.id;
+    select.appendChild(option);
+  });
+  var ids = rows.map(function(r){ return r.id; });
+  select.value = ids.indexOf(previous) !== -1 ? previous : ids[0];
+  note.textContent = 'answered by ' + ((railDevice && railDevice.device_name)
+    || $('host').textContent || 'this Tiiny');
+  chatModelChanged();
+}
+function chatModelChanged(){
+  var model = $('chat-model').value;
+  if (!model || model === cardModel) return;
+  cardModel = model;
+  var box = $('model-card');
+  box.textContent = '';
+  box.appendChild(el('div','card-note','reading the model record…'));
+  api('/api/model_card?model=' + encodeURIComponent(model))
+    .then(function(card){ if (card.model === cardModel) paintModelCard(card); })
+    .catch(function(err){
+      box.textContent = '';
+      box.appendChild(el('div','turn-err', err.message));
+    });
+}
+/* The device sends input and output as single words ("Text" / "Vector") while
+   the route declares lists, so both shapes are read and neither is invented. */
+function capText(value){
+  if (value === undefined || value === null) return '-';
+  if (value instanceof Array) return value.length ? value.join(', ') : '-';
+  return String(value);
+}
+function paintModelCard(card){
+  var box = $('model-card');
+  box.textContent = '';
+  var caps = card.capabilities || null;
+  var rows = el('dl','kv');
+  [['name', card.name || sh(card.model)],
+   ['id', card.model],
+   ['type', card.type || '-'],
+   ['params', card.params || '-'],
+   ['size', card.size_bytes ? gb(card.size_bytes) : '-'],
+   ['npu', card.npu_usage ? card.npu_usage + ' units' : '-'],
+   ['input', caps ? capText(caps.input) : '-'],
+   ['output', caps ? capText(caps.output) : '-'],
+   ['chat', card.can_chat ? 'yes' : 'no']
+  ].forEach(function(row){
+    rows.appendChild(el('dt', null, row[0]));
+    rows.appendChild(el('dd', null, row[1]));
+  });
+  box.appendChild(rows);
+  var where = el('div','model-where'), loaded = card.loaded_on || [];
+  if (!loaded.length){
+    where.appendChild(el('div','card-note',
+      'Not loaded. Nothing can be asked of it until it is.'));
+  } else {
+    loaded.forEach(function(row){
+      var line = el('div','model-where-row');
+      line.appendChild(el('span','dot' + (row.status==='running' ? '' : ' off')));
+      line.appendChild(el('span', null, row.device_name || 'this Tiiny'));
+      line.appendChild(el('span','meta', row.status || 'loaded'));
+      where.appendChild(line);
+    });
+  }
+  box.appendChild(where);
+  if (card.desc) box.appendChild(el('div','model-desc', card.desc));
+  if (card.catalog_url){
+    var link = el('a','card-link','Catalogue entry ↗');
+    link.href = card.catalog_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    box.appendChild(link);
+  }
+}
+
+/* ---- the instances rail and the load panel ---------------------------- */
+function loadInstances(){
+  return api('/api/instances').then(paintInstances).catch(function(err){
+    var list = $('instances-list');
+    list.textContent = '';
+    list.appendChild(el('div','turn-err', err.message));
+  });
+}
+function paintInstances(payload){
+  var devices = payload.devices || [], instances = payload.instances || [];
+  railDevice = devices[0] || null;
+  $('instances-count').textContent = instances.length + ' loaded';
+  var box = $('instances-devices');
+  box.textContent = '';
+  if (railDevice){
+    var row = el('div','rail-device'), head = el('div','rail-device-head');
+    head.appendChild(el('span','dot' + (railDevice.reachable ? '' : ' off')));
+    head.appendChild(el('span', null, railDevice.device_name || railDevice.device_id));
+    head.appendChild(el('b', null,
+      (railDevice.npu_used === null || railDevice.npu_used === undefined
+        ? '-' : railDevice.npu_used) + ' / ' + (railDevice.npu_total || '-')));
+    row.appendChild(head);
+    if (railDevice.npu_total){
+      var pct = 100 * Number(railDevice.npu_used||0) / Number(railDevice.npu_total);
+      var meter = el('span','meter'), fill = el('i');
+      meter.style.display = 'block';
+      fill.style.width = Math.max(0, Math.min(100, pct)).toFixed(0) + '%';
+      fill.style.background = pct >= 95 ? 'var(--bad)' : pct >= 80 ? 'var(--hot)' : 'var(--orange)';
+      meter.appendChild(fill);
+      row.appendChild(meter);
+    }
+    box.appendChild(row);
+  }
+  var list = $('instances-list');
+  list.textContent = '';
+  if (!instances.length){
+    list.appendChild(el('div','instances-empty',
+      'Nothing loaded. Inference needs a loaded model.'));
+  }
+  instances.forEach(function(inst){
+    var loading = inst.status && inst.status !== 'running';
+    var card = el('div','instance-card' + (loading ? ' loading' : ''));
+    var name = el('div','instance-model', sh(inst.model));
+    name.title = inst.model;
+    card.appendChild(name);
+    var meta = el('div','instance-meta');
+    meta.appendChild(el('span', null, (inst.npu_usage || '?') + ' units'));
+    if (inst.instance_id) meta.appendChild(el('span', null, sh(inst.instance_id)));
+    card.appendChild(meta);
+    var foot = el('div','instance-footer');
+    foot.appendChild(el('span','instance-status'+(loading?' loading':''),
+                        inst.status || 'running'));
+    var kill = el('button','instance-delete','Unload');
+    kill.type = 'button';
+    kill.onclick = function(){ kill.disabled = true; unloadModel(inst.model); };
+    foot.appendChild(kill);
+    card.appendChild(foot);
+    list.appendChild(card);
+  });
+  /* One box, so the device chooser is a label. */
+  var where = $('load-device');
+  where.textContent = '';
+  where.appendChild(el('span','dot' + (railDevice && railDevice.reachable ? '' : ' off')));
+  where.appendChild(el('span', null, railDevice
+    ? (railDevice.device_name || railDevice.device_id) : 'no device'));
+  fillLoadModels();
+  updateLoadHint();
+  /* The rail answers after the picker has already been filled, and the box's
+     own name only arrives with it. */
+  if (!$('chat-model').disabled && railDevice && railDevice.device_name){
+    $('chat-route').textContent = 'answered by ' + railDevice.device_name;
+  }
+}
+/* Only a model that is installed here, can chat, and is not already loaded. */
+function fillLoadModels(){
+  var select = $('load-model');
+  var rows = S.cat.filter(function(m){
+    return CHAT[m.type] && S.live.indexOf(m.id) < 0;
+  });
+  var shape = rows.map(function(r){ return r.id; }).join(',');
+  if (shape === loadShape) return;
+  loadShape = shape;
+  var previous = select.value;
+  select.textContent = '';
+  if (!rows.length){
+    select.appendChild(el('option', null, 'nothing idle to load'));
+    select.disabled = true;
+    $('load-btn').disabled = true;
+    return;
+  }
+  select.disabled = false;
+  $('load-btn').disabled = false;
+  rows.forEach(function(row){
+    var option = el('option', null, sh(row.id) + '  ·  ' + (row.npu_usage||'?') + ' units');
+    option.value = row.id;
+    option.setAttribute('data-npu', String(row.npu_usage || 0));
+    select.appendChild(option);
+  });
+  var ids = rows.map(function(r){ return r.id; });
+  select.value = ids.indexOf(previous) !== -1 ? previous : ids[0];
+}
+/* Refused here as well as at the server, because the device does not refuse:
+   it accepts the start, reports loading, and drops the instance a moment later
+   without ever saying no. */
+function updateLoadHint(){
+  var hint = $('load-hint'), select = $('load-model');
+  hint.className = 'load-hint';
+  if (!railDevice){ hint.textContent = 'No device yet.'; return; }
+  var name = railDevice.device_name || railDevice.device_id;
+  var free = Number(railDevice.npu_total||0) - Number(railDevice.npu_used||0);
+  var option = select.options[select.selectedIndex];
+  if (select.disabled || !option || !option.value){
+    hint.textContent = free + ' of ' + (railDevice.npu_total || '?')
+      + ' NPU units free on ' + name + '.';
+    return;
+  }
+  var need = Number(option.getAttribute('data-npu') || 0);
+  if (need && need > free){
+    hint.className = 'load-hint warn';
+    hint.textContent = sh(option.value) + ' asks for ' + need + ' NPU units and only '
+      + free + ' are free on ' + name + '. The device would accept the load and roll it '
+      + 'back a moment later without saying so, so it is refused here.';
+    $('load-btn').disabled = true;
+    return;
+  }
+  $('load-btn').disabled = false;
+  hint.textContent = sh(option.value) + ' asks for ' + (need || '?')
+    + ' of the ' + free + ' units free on ' + name + '.';
+}
+function startLoad(){
+  var model = $('load-model').value;
+  if (!model) return toast('pick a model', true);
+  $('load-btn').disabled = true;
+  api('/api/instances/load', {method:'POST', body:{model:model}})
+    .then(function(){ toast('loading ' + sh(model)); watchInstances(model, true); })
+    .catch(function(err){ toast(err.message, true); })
+    .then(function(){ $('load-btn').disabled = false; });
+}
+function unloadModel(model){
+  api('/api/instances/unload', {method:'POST', body:{model:model}})
+    .then(function(){ toast('unloading ' + sh(model)); watchInstances(model, false); })
+    .catch(function(err){ toast(err.message, true); loadInstances(); });
+}
+/* A load is only proven by the instance turning up as running. The device
+   reports "loading" either way, so the panel keeps polling until it is running
+   or gone, and says which happened. */
+function watchInstances(model, wantRunning){
+  var tries = 0;
+  if (instanceWatch) clearTimeout(instanceWatch);
+  (function step(){
+    instanceWatch = setTimeout(function(){
+      tries++;
+      api('/api/instances').then(function(payload){
+        paintInstances(payload);
+        var found = null;
+        (payload.instances||[]).forEach(function(r){ if (r.model === model) found = r; });
+        if (wantRunning && found && found.status === 'running'){
+          catalog().then(function(){ loadShape=''; fillChatModels(); fillLoadModels(); });
+          return toast(sh(model) + ' is running');
+        }
+        if (wantRunning && !found && tries > 1){
+          loadShape = ''; fillLoadModels();
+          return toast(sh(model) + ' never came up: the device rolled the load back, '
+            + 'which is what it does when the NPU budget does not fit.', true);
+        }
+        if (!wantRunning && !found){
+          catalog().then(function(){ loadShape=''; fillChatModels(); fillLoadModels(); });
+          return toast(sh(model) + ' unloaded');
+        }
+        if (tries < 40) step();
+      }).catch(function(){ if (tries < 40) step(); });
+    }, 1500);
+  })();
+}
+
+/* ---- sending ---------------------------------------------------------- */
+function chatConfig(){
+  var temperature = parseFloat($('chat-temp').value);
+  if (isNaN(temperature)) temperature = 0.7;
+  var maxTokens = parseInt($('chat-max-tokens').value, 10);
+  if (isNaN(maxTokens) || maxTokens < 1) maxTokens = 700;
+  return {temperature:temperature, max_tokens:maxTokens,
+          system:$('chat-system').value.trim(),
+          thinking:$('chat-thinking').checked, stream:$('chat-stream').checked};
+}
+/* The whole conversation goes up, minus anything that failed and minus the
+   empty turn being written right now. Reasoning is never sent back: it is the
+   model's scratch paper, and it would be charged as prompt tokens. */
+function historyFor(conv){
+  var out = [];
+  conv.messages.forEach(function(m){
+    if (m.error || !m.content) return;
+    out.push({role:m.role, content:m.content});
+  });
+  return out;
+}
+function scrollLog(){
+  var log = $('chat-log');
+  if (log.scrollHeight - log.scrollTop - log.clientHeight < 160) log.scrollTop = log.scrollHeight;
+}
+function send(text){
+  if (chatBusy) return;
+  var model = $('chat-model').value;
+  if (!model || $('chat-model').disabled){
+    return toast('no chat model is loaded. Load one in the panel on the right.', true);
+  }
+  if (!currentConv) newConversation();
+  var config = chatConfig();
+  $('chat-empty').hidden = true;
+  var turns = $('chat-turns');
+  var mine = {role:'user', content:text};
+  currentConv.messages.push(mine);
+  turns.appendChild(messageNode(mine));
+  var reply = {role:'assistant', model:model, content:'', reasoning:'',
+               think_s:null, stats:null, error:null, note:null};
+  var body = {model:model, messages:historyFor(currentConv), stream:config.stream,
+              thinking:config.thinking, temperature:config.temperature,
+              max_tokens:config.max_tokens, system:config.system};
+  currentConv.messages.push(reply);
+  var node = messageNode(reply);
+  turns.appendChild(node);
+  live = {msg:reply, node:node, started:Date.now(), streamed:config.stream,
+          thinking:config.thinking, finish:null};
+  chatBusy = true;
+  $('chat-send').disabled = true;
+  saveCurrent(); renderConvList(); scrollLog();
+  if (!config.stream){
+    api('/api/chat', {method:'POST', body:body})
+      .then(function(payload){
+        var choice = (payload.choices || [{}])[0] || {};
+        var message = choice.message || {};
+        reply.content = message.content || '';
+        if (config.thinking) reply.reasoning = message.reasoning_content || '';
+        if (choice.finish_reason) live.finish = choice.finish_reason;
+        if (payload.stats) handleStats(payload.stats);
+      })
+      .catch(function(err){ reply.error = err.message; })
+      .then(function(){ finishTurn(); });
+    return;
+  }
+  streamChat(body);
+}
+function streamChat(body){
+  var eventName = '';
+  fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+                      body:JSON.stringify(body)})
+    .then(function(resp){
+      if (!resp.ok){
+        return resp.text().then(function(text){
+          var payload = {};
+          try { payload = JSON.parse(text); } catch (e) { payload = {}; }
+          throw new Error((payload.error && payload.error.message) || ('HTTP ' + resp.status));
+        });
+      }
+      var reader = resp.body.getReader(), decoder = new TextDecoder(), buffer = '';
+      function pump(){
+        return reader.read().then(function(chunk){
+          if (chunk.done) return;
+          buffer += decoder.decode(chunk.value, {stream:true});
+          var parts = buffer.split('\n');
+          buffer = parts.pop();
+          parts.forEach(function(raw){
+            var line = raw.replace(/\r$/, '');
+            /* A blank line ends an SSE frame, so the event name only applies
+               to the data lines that follow it. */
+            if (!line.trim()){ eventName = ''; return; }
+            if (line.indexOf('event:') === 0){ eventName = line.slice(6).trim(); return; }
+            if (line.indexOf('data:') !== 0) return;
+            var data = line.slice(5).trim();
+            if (data === '[DONE]') return;
+            var frame = null;
+            try { frame = JSON.parse(data); } catch (e) { return; }
+            /* The server relays the device's chunks and appends one frame of
+               its own, named "stats", after the last of them. */
+            if (eventName === 'stats') handleStats(frame);
+            else handleFrame(frame);
+          });
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(function(err){ if (live) live.msg.error = err.message; })
+    .then(function(){ finishTurn(); });
+}
+function handleFrame(frame){
+  if (!live) return;
+  if (frame.error){
+    live.msg.error = frame.error.message || String(frame.error);
+    repaintLive();
+    return;
+  }
+  if (frame.stats) handleStats(frame.stats);
+  /* The final usage chunk carries "choices": [], and the opening chunk carries
+     content: null, so neither the choice nor the delta may be assumed. */
+  var choice = (frame.choices || [])[0] || {}, delta = choice.delta || {};
+  if (choice.finish_reason) live.finish = choice.finish_reason;
+  var touched = false;
+  if (live.thinking && typeof delta.reasoning_content === 'string' && delta.reasoning_content){
+    live.msg.reasoning += delta.reasoning_content;
+    touched = true;
+  }
+  if (typeof delta.content === 'string' && delta.content){
+    /* The first word of the answer is when thinking stopped. */
+    if (!live.msg.content && live.msg.reasoning && live.msg.think_s === null){
+      live.msg.think_s = (Date.now() - live.started) / 1000;
+    }
+    live.msg.content += delta.content;
+    touched = true;
+  }
+  if (touched) repaintLive();
+}
+function handleStats(stats){
+  if (!live || !stats) return;
+  live.msg.stats = stats;
+  if (stats.finish_reason) live.finish = stats.finish_reason;
+  repaintLive();
+}
+function repaintLive(){
+  paintMessage(live.node, live.msg);
+  var think = live.node.__think;
+  /* Open while it is the only thing on screen, folded away once the answer
+     starts: the reasoning is context, not the reply. */
+  if (!think.hidden) think.open = !live.msg.content;
+  scrollLog();
+}
+function finishTurn(){
+  if (live){
+    var msg = live.msg, node = live.node;
+    /* A stream that carried reasoning and never reached an answer thought right
+       up to the end, so the whole request is the thinking time. Nothing watches
+       that boundary when the reply arrives in one piece: there the request is
+       prefill plus reasoning plus the entire answer, and labelling that
+       "thinking" made the same model and the same question report two different
+       durations depending on whether Stream was ticked. */
+    if (msg.reasoning && msg.think_s === null && live.streamed){
+      msg.think_s = (Date.now() - live.started) / 1000;
+    }
+    if (msg.stats && !msg.stats.finish_reason && live.finish){
+      msg.stats.finish_reason = live.finish;
+    }
+    if (!msg.content && !msg.error){
+      msg.note = live.finish === 'length'
+        ? 'No answer text came back. The token budget was spent on thinking, which is '
+          + 'what a reasoning model does with a tight cap: raise Max tokens, or turn '
+          + 'Thinking off.'
+        : 'The model returned an empty answer.';
+    }
+    if (!msg.stats && !msg.error) msg.stats_missing = true;
+    live = null;
+    paintMessage(node, msg);
+    if (node.__think && !node.__think.hidden) node.__think.open = !msg.content;
+  }
+  chatBusy = false;
+  $('chat-send').disabled = false;
+  saveCurrent(); renderConvList(); scrollLog();
+  loadInstances();
+}
+
+/* Entering the tab paints all three columns: the card for whatever the picker
+   has selected, the conversation, and the rail of what is loaded right now. */
+function chatEnter(){
+  if (!S.cat.length) return catalog().then(chatEnter);
+  fillChatModels();
+  renderConversation();
+  renderConvList();
+  loadInstances();
+}
+function wireChat(){
+  $('chat-form').onsubmit = function(ev){
+    ev.preventDefault();
+    var input = $('chat-input'), text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    send(text);
+  };
+  $('chat-input').onkeydown = function(ev){
+    if (ev.key === 'Enter' && !ev.shiftKey){
+      ev.preventDefault();
+      $('chat-form').dispatchEvent(new Event('submit'));
+    }
+  };
+  $('chat-model').onchange = function(){ chatModelChanged(); saveCurrent(); };
+  $('new-chat').onclick = function(){ newConversation(); };
+  $('load-model').onchange = updateLoadHint;
+  $('load-btn').onclick = startLoad;
+  /* One listener for every copy button the renderer will ever write, so the
+     markdown can be redrawn on each delta without rebinding anything. */
+  $('chat-log').addEventListener('click', function(ev){
+    var button = ev.target.closest ? ev.target.closest('.code-copy-btn') : null;
+    if (!button) return;
+    var wrapper = button.closest('.code-block-wrapper');
+    var code = wrapper ? wrapper.querySelector('code') : null;
+    if (!code || !navigator.clipboard) return;
+    navigator.clipboard.writeText(code.textContent).then(function(){
+      button.textContent = 'Copied';
+      button.classList.add('copied');
+      setTimeout(function(){ button.textContent='Copy'; button.classList.remove('copied'); }, 1400);
+    });
+  });
+  readConversations();
+  renderConvList();
+}
+
 /* ---- go ------------------------------------------------------------- */
 /* Routing and the connection panel go up first and on their own. Hanging the
    first go() off the catalog meant one slow or failed request left every
    button on the page inert, which is what a tester sees as "it does nothing".
-   Each leg catches its own failure so no one of them can take the rest down. */
+   Each leg catches its own failure so no one of them can take the rest down.
+   wireChat only binds handlers and reads this browser's own storage, so it is
+   a leg of its own and asks nothing of the box. */
+wireChat();
 connLooking();
 var p0 = location.hash.slice(1);
 go(p0 && $('p-'+p0) ? p0 : 'dash');

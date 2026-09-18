@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 import os
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
@@ -936,6 +936,48 @@ def api_raw(target, tok, body=None, timeout=300):
     return _request(target, tok, body, timeout, None, read=True)
 
 
+class DeviceError(Exception):
+    """The device could not be reached, or answered with something unusable."""
+
+
+def open_call(target, tok, body=None, timeout=900, extra=None):
+    """(response, status) for one call, over whichever transport reaches it.
+
+    api() flattens every failure into {"_error": ...} with no status and reads
+    the whole body, which is right for a benchmark row and wrong for the two
+    callers below: one has to tell the device's own refusal from a transport
+    failure, and the other has to read a stream as it arrives rather than after
+    it ends. An HTTP error comes back as the response object, because
+    HTTPError is one and the device's sentence is inside it. Only a transport
+    failure raises.
+
+    The port-then-vhost walk is _attempts and _mark, the same as _request: a
+    refused connection, and only a refused connection, moves the service onto
+    the port 80 vhost for the rest of the run.
+    """
+    err = None
+    for url, hdrs, mode in _attempts(target):
+        req = urllib.request.Request(
+            url, method="POST" if body is not None else "GET",
+            data=json.dumps(body).encode() if body else None,
+            headers={"Authorization": f"Bearer {tok}", **hdrs, **(extra or {}),
+                     **({"Content-Type": "application/json"} if body else {})})
+        try:
+            resp = OPENER.open(req, timeout=timeout)
+            _mark(target, mode)
+            return resp, resp.status
+        except urllib.error.HTTPError as exc:
+            _mark(target, mode)
+            return exc, exc.code
+        except Exception as exc:  # noqa: BLE001
+            err = exc
+            if mode == "direct" and _refused(exc) and not isinstance(target, str):
+                _mark(target, "vhost")
+                continue
+            break
+    raise DeviceError(str(err)[:200])
+
+
 def telemetry(tok):
     s = api(mgmt("/api/v1/sys/status"), tok, timeout=20)
     n = (s.get("npus") or [{}])[0]
@@ -948,6 +990,79 @@ def telemetry(tok):
     }
 
 
+def derive_stats(timings, usage, wall_s=None):
+    """The numbers a completion reports about itself, from the gateway's own blocks.
+
+    Copied verbatim from AINode Pocket 0.1.3 (pocket/bench.py, derive_stats),
+    which is the sibling app on the same hardware. Both apps read the same two
+    gateway blocks, so a figure in TiinyBench's chat bar, a figure in a saved
+    TiinyBench result and a figure in Pocket's chat bar all mean the same thing.
+    Two copies of this arithmetic would drift the first time the gateway renamed
+    a field; keep them one function apart or not at all.
+
+    `timings` and `usage` are the blocks the gateway sends: at the top level of a
+    non-streamed completion, and in the final chunk of a stream asked for with
+    stream_options.include_usage. Nothing here is computed from a clock on this
+    side, which is why the chat route adds its own measured ttft_ms on top rather
+    than replacing ttft_s: ttft_s is prefill plus one token's decode time, the
+    only answer available when the whole reply arrives at once.
+    """
+    timings = timings or {}
+    usage = usage or {}
+    stats = {
+        "prompt_tokens": usage.get("prompt_tokens", timings.get("prompt_n", 0)),
+        "out_tokens": usage.get("completion_tokens", timings.get("predicted_n", 0)),
+        "prefill_tok_s": round(timings.get("prompt_per_second") or 0, 2),
+        "decode_tok_s": round(timings.get("predicted_per_second") or 0, 2),
+        "prefill_ms": round(timings.get("prompt_ms") or 0, 1),
+        "ttft_s": round((timings.get("prompt_ms") or 0) / 1000
+                        + (timings.get("predicted_per_token_ms") or 0) / 1000, 3),
+        "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
+    }
+    if wall_s is not None:
+        stats["wall_s"] = round(wall_s, 3)
+    return stats
+
+
+def chat_stats(timings, usage, total_ms, ttft_ms, finish_reason, device, model):
+    """The one object the Chat page reads its numbers out of.
+
+    Copied verbatim from AINode Pocket 0.1.3 (pocket/server.py, chat_stats).
+
+    Everything the device can measure comes from the device's own timings and
+    usage blocks through the benchmark's derivation, so a number in the chat bar
+    and the same number in a saved benchmark mean the same thing. Only the two
+    wall clock figures belong to this machine: when the first token arrived and
+    how long the whole request took, neither of which the device can see.
+
+    A block the device never sent reports null here, not zero. The benchmark's
+    derivation answers a missing block with zeroes because a saved row wants a
+    number in every column, but on this page a zero is a claim: a stream that
+    died at the 220 second cap never reaches the chunk carrying these blocks,
+    and "out 0" beside a turn that really streamed four hundred tokens is the
+    one kind of lie a page about trustworthy numbers cannot tell. The page
+    prints a dash for null, which says the device did not report it.
+    """
+    derived = derive_stats(timings, usage)
+    measured, counted = bool(timings), bool(usage) or bool(timings)
+    if ttft_ms is None and measured:
+        # Nothing streamed, so there was no first token to time here. The
+        # device's own answer is prefill plus one token of decode, which is what
+        # the benchmark reports for the same request.
+        ttft_ms = round(derived["ttft_s"] * 1000, 1)
+    return {"ttft_ms": ttft_ms,
+            "prefill_ms": derived["prefill_ms"] if measured else None,
+            "decode_tok_s": derived["decode_tok_s"] if measured else None,
+            "prefill_tok_s": derived["prefill_tok_s"] if measured else None,
+            "prompt_tokens": derived["prompt_tokens"] if counted else None,
+            "out_tokens": derived["out_tokens"] if counted else None,
+            "cached_tokens": derived["cached_tokens"] if usage else None,
+            "total_ms": round(total_ms, 1),
+            "finish_reason": finish_reason,
+            "device": device,
+            "model": model}
+
+
 def chat(tok, model, prompt, max_tokens, thinking=False):
     body = {"model": model, "max_tokens": max_tokens,
             "chat_template_kwargs": {"enable_thinking": thinking},
@@ -957,19 +1072,9 @@ def chat(tok, model, prompt, max_tokens, thinking=False):
     wall = time.time() - t0
     if "_error" in v:
         return {"error": v["_error"], "wall_s": round(wall, 2)}
-    t = v.get("timings") or {}
-    u = v.get("usage") or {}
-    return {
-        "wall_s": round(wall, 3),
-        "prompt_tokens": u.get("prompt_tokens", t.get("prompt_n", 0)),
-        "out_tokens": u.get("completion_tokens", t.get("predicted_n", 0)),
-        "prefill_tok_s": round(t.get("prompt_per_second") or 0, 2),
-        "decode_tok_s": round(t.get("predicted_per_second") or 0, 2),
-        "prefill_ms": round(t.get("prompt_ms") or 0, 1),
-        "ttft_s": round((t.get("prompt_ms") or 0) / 1000
-                        + (t.get("predicted_per_token_ms") or 0) / 1000, 3),
-        "cached_tokens": (u.get("prompt_tokens_details") or {}).get("cached_tokens", 0),
-    }
+    # The suite and the Chat page read the same derivation. This used to be a
+    # second copy of the same arithmetic sitting right here.
+    return derive_stats(v.get("timings"), v.get("usage"), wall)
 
 
 # ------------------------------------------------------------------ catalog
@@ -1001,6 +1106,146 @@ def running(tok):
 def npu_free(tok):
     s = api(gw("/api/v1/models/npu/status"), tok, timeout=30)
     return s.get("npu_available"), s.get("npu_total")
+
+
+def npu_status(tok):
+    """The whole NPU budget reply, not just the two totals.
+
+    The Chat page's rail wants the per-model rows as well, and reading this is
+    also what moves a pending load along on real firmware: a start that does not
+    fit is accepted, sits here as "loading", and then vanishes. This endpoint is
+    the only place that can be seen.
+    """
+    s = api(gw("/api/v1/models/npu/status"), tok, timeout=30)
+    return {} if "_error" in s else s
+
+
+def catalog_raw(tok):
+    """Installed models with every field the device sent, not the seven columns.
+
+    catalog() keeps what a benchmark table needs. The model card beside the
+    conversation wants input, output, desc and capabilities too, and those are
+    thrown away up there.
+    """
+    d = api(gw("/api/v1/models/"), tok, timeout=60)
+    if "_error" in d:
+        raise DeviceError(d["_error"])
+    return [m for m in (d.get("data") or []) if isinstance(m, dict)]
+
+
+def running_detail(tok):
+    """What is loaded right now, with each instance's units and status.
+
+    running() answers the list of model ids, which is all the suite needs. The
+    rail also has to tell a model that is up from one that is still coming up.
+    """
+    d = api(gw("/api/v1/models/running"), tok, timeout=30)
+    if "_error" in d:
+        raise DeviceError(d["_error"])
+    return d
+
+
+# What /v1/chat/completions will actually serve. Distinct from CHAT_TYPES above,
+# which is every class the benchmark has a test for and includes image, speech
+# and embedding models. "main" is the device's own word for the chat runtime;
+# an older catalogue row carries no capabilities at all, so the type is the
+# fallback rather than a refusal.
+CHAT_CAPABILITY = "main"
+CHAT_MODEL_TYPES = frozenset(["text generation", "image-text-to-text"])
+
+# Plain English for a refusal, so the message says what the model is instead of
+# echoing a label out of a catalogue at somebody.
+TYPE_PHRASES = {
+    "text-to-speech": "a text-to-speech model",
+    "asr": "a speech recognition model",
+    "text embedding": "an embedding model",
+    "text reranking": "a reranking model",
+    "text-to-image": "an image generation model",
+    "image-to-text": "an OCR model",
+    "music generation": "a music generation model",
+}
+
+
+def capability_list(entry):
+    """The capabilities a model row claims, lowercased, or an empty list."""
+    if not isinstance(entry, dict):
+        return []
+    raw = entry.get("capabilities")
+    if not isinstance(raw, (list, tuple)):
+        return []
+    return [str(item).strip().lower() for item in raw if str(item).strip()]
+
+
+def can_chat(type_label=None, capabilities=None):
+    """Whether /v1/chat/completions can serve this model.
+
+    Capabilities win when the device sent any. An empty list is not an answer,
+    so it falls through to the type rather than refusing everything on firmware
+    that omits the field.
+    """
+    if capabilities:
+        return CHAT_CAPABILITY in [str(item).strip().lower() for item in capabilities]
+    return str(type_label or "").strip().lower() in CHAT_MODEL_TYPES
+
+
+def type_phrase(type_label):
+    """"a text-to-speech model" for a type there is a phrase for, else "".
+
+    An empty answer is deliberate: the caller says "is not a chat model" rather
+    than inventing a description of a type nobody has seen yet.
+    """
+    label = str(type_label or "").strip()
+    if not label:
+        return ""
+    return TYPE_PHRASES.get(label.lower(), "")
+
+
+BUSY_CODE = 150004
+# A 150004 means somebody else has the device: another app, or the box doing its
+# own work. Backing off briefly is cheap and usually wins.
+BUSY_RETRIES = 4
+BUSY_BACKOFF = 1.5
+
+
+def chat_once(tok, body, timeout=240):
+    """(status, payload) for one non-streamed completion, errors included.
+
+    The status is kept because the route that calls this has to tell the
+    device's own refusal, which carries a sentence worth showing, from a
+    transport failure, which carries a different one.
+    """
+    resp, status = open_call(gw("/v1/chat/completions"), tok, body, timeout)
+    with resp:
+        try:
+            payload = json.load(resp)
+        except Exception:  # noqa: BLE001
+            payload = {}
+    # An in-band busy: HTTP 200 carrying a code and no choices.
+    if status == 200 and isinstance(payload, dict) \
+            and payload.get("code") and "choices" not in payload:
+        return 503, payload
+    return status, payload
+
+
+def chat_lines(tok, body, timeout=600):
+    """Yield the device's own SSE lines for a streamed completion."""
+    resp, status = open_call(gw("/v1/chat/completions"), tok,
+                             dict(body, stream=True), timeout,
+                             extra={"Accept": "text/event-stream"})
+    if status != 200:
+        with resp:
+            detail = resp.read().decode("utf-8", "replace")[:160]
+        raise DeviceError("the device answered HTTP %d%s"
+                          % (status, (": " + detail) if detail.strip() else ""))
+    with resp:
+        try:
+            for raw in resp:
+                yield raw.decode("utf-8", "replace").rstrip("\n")
+        except Exception as exc:  # noqa: BLE001
+            # The gateway closes a single request at about 220 seconds. The
+            # tokens already relayed are real, so this is not a failure of the
+            # whole turn and the caller says so rather than swallowing it.
+            raise DeviceError(str(exc)[:200])
 
 
 def load(tok, model, poll_s=420):
@@ -1040,13 +1285,21 @@ def unload_all(tok):
 def online(tok):
     """The vendor catalogue: everything downloadable, installed or not.
 
+    Read off the box on every call. There is no pinned or hand-kept list in
+    this repo, which is the point: a catalogue baked in here would be wrong
+    within a week.
+
     Distinct from catalog(), which is only what is already on the box. A
     benchmark that cannot fetch a model it has not got has a dead end in it,
     and "download it, then measure it" is the whole point of closing this loop.
+
+    A box that does not answer raises. This used to return an empty list, which
+    the page then printed as "0 in the catalogue": a silent zero that reads as
+    an empty store rather than as a question nobody answered.
     """
     d = api(gw("/api/v1/models/online_models"), tok, timeout=90)
     if isinstance(d, dict) and "_error" in d:
-        return []
+        raise DeviceError(d["_error"])
     rows = d if isinstance(d, list) else (d.get("data") or d.get("models") or [])
     out = []
     for m in rows:
