@@ -2,6 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script>try{if(localStorage.getItem('tb.nav')==='slim')document.documentElement.classList.add('nav-slim')}catch(e){}</script>
 <title>TiinyBench</title>
 <link rel="icon" href="/assets/tiinybench-favicon.svg">
 <style>
@@ -58,6 +59,33 @@ nav{
 .navfoot .row a:hover{text-decoration:underline}
 .navfoot .row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
 .navfoot b{color:var(--steel);font-weight:400}
+
+/* ---- the sidebar folds to icons ------------------------------------------
+   Jason, looking at the Chat page: "if I could collapse the left-hand nav to just icons,
+   would I have a little bit more space?" Yes: 236px becomes 64px. The state is remembered
+   per browser (localStorage tb.nav) and applied on <html> before first paint so a folded
+   sidebar never flashes wide. Labels are hidden by shrinking the button's font to nothing
+   and restoring the glyph, which keeps the markup and the click handlers exactly as they
+   were; each button gets its label as a title while folded, so hovering still names it. */
+.navtoggle{margin-left:auto;flex:none;width:26px;height:26px;border:1px solid var(--line);
+  border-radius:5px;background:var(--s2);color:var(--steel);font:inherit;font-size:13px;
+  line-height:1;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.navtoggle:hover{background:var(--s3);color:var(--ink);border-color:var(--line2)}
+.navtoggle:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+body{transition:grid-template-columns .18s ease-out}
+html.nav-slim{--nav:64px}
+html.nav-slim .brand{flex-direction:column;gap:10px;padding:16px 0 14px;align-items:center}
+html.nav-slim .brand .brandtext{display:none}
+html.nav-slim .navtoggle{margin-left:0}
+html.nav-slim .navlist{padding:10px 8px}
+html.nav-slim .navlist .sect{font-size:0;padding:0;margin:10px 10px;height:1px;background:var(--line)}
+html.nav-slim .navlist button{font-size:0;gap:0;justify-content:center;padding:11px 0}
+html.nav-slim .navlist .ico{font-size:14px;width:auto;opacity:.9}
+html.nav-slim .navfoot{padding:12px 0;text-align:center}
+html.nav-slim .navfoot .row{justify-content:center;margin-bottom:0}
+html.nav-slim .navfoot .row > span,html.nav-slim .navfoot .row > b,html.nav-slim .navfoot .row > a{display:none}
+html.nav-slim .navfoot .row + .row + .row{display:none}
+@media (prefers-reduced-motion:reduce){body{transition:none}}
 .navfoot img{height:12px;opacity:.55;display:block}
 
 /* ---- main ----------------------------------------------------------- */
@@ -257,6 +285,11 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
   .navlist{display:flex;overflow-x:auto;padding:8px;min-width:0}
   .navlist .sect{display:none}
   .navlist button{white-space:nowrap}
+  .navtoggle{display:none}
+  html.nav-slim .brand{flex-direction:row;padding:20px 18px 18px}
+  html.nav-slim .brand .brandtext{display:block}
+  html.nav-slim .navlist button{font-size:13px;gap:11px;justify-content:flex-start;padding:9px 11px}
+  html.nav-slim .navlist .sect{display:none;height:auto;background:none}
   .brand{min-width:0}
 }
 
@@ -465,7 +498,9 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 <nav>
   <div class="brand">
     <img src="/assets/tiinybench-favicon.svg" alt="">
-    <div><div class="n">Tiiny<em>Bench</em></div><div class="s">Benchmark suite</div></div>
+    <div class="brandtext"><div class="n">Tiiny<em>Bench</em></div><div class="s">Benchmark suite</div></div>
+    <button class="navtoggle" id="navtoggle" type="button" aria-pressed="false"
+            aria-label="Collapse the sidebar to icons" title="Collapse the sidebar">&laquo;</button>
   </div>
   <div class="navlist" id="nav">
     <div class="sect">Measure</div>
@@ -847,6 +882,29 @@ $('nav').addEventListener('click', function(e){
 });
 document.addEventListener('click', function(e){
   var g=e.target.closest('[data-goto]'); if(g) go(g.getAttribute('data-goto'));
+});
+
+/* The sidebar folds to icons and remembers it. Applied on <html> so the early script in
+   <head> and this handler agree on the class; titles are only present while folded. */
+function navSlim(on, save){
+  document.documentElement.classList.toggle('nav-slim', !!on);
+  var t=document.getElementById('navtoggle');
+  if(t){
+    t.setAttribute('aria-pressed', on?'true':'false');
+    t.setAttribute('aria-label', on?'Expand the sidebar':'Collapse the sidebar to icons');
+    t.setAttribute('title', on?'Expand the sidebar':'Collapse the sidebar');
+    t.innerHTML = on?'&raquo;':'&laquo;';
+  }
+  var bs=document.querySelectorAll('#nav button[data-p]');
+  for(var i=0;i<bs.length;i++){
+    if(on) bs[i].setAttribute('title', bs[i].textContent.replace(/^\s*\S\s*/,'').trim());
+    else bs[i].removeAttribute('title');
+  }
+  if(save){ try{ localStorage.setItem('tb.nav', on?'slim':'full'); }catch(e){} }
+}
+navSlim(document.documentElement.classList.contains('nav-slim'), false);
+document.getElementById('navtoggle').addEventListener('click', function(){
+  navSlim(!document.documentElement.classList.contains('nav-slim'), true);
 });
 window.addEventListener('hashchange', function(){
   var p=location.hash.slice(1); if(p && $('p-'+p)) go(p);
