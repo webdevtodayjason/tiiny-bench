@@ -25,14 +25,14 @@ html{background:var(--ground);color-scheme:dark}
 body{
   font-family:var(--mono);color:var(--ink);font-size:14px;line-height:1.55;
   letter-spacing:-.01em;-webkit-font-smoothing:antialiased;background:var(--ground);
-  display:grid;grid-template-columns:var(--nav) minmax(0,1fr);min-height:100vh;
+  display:grid;grid-template-columns:var(--nav) minmax(0,1fr);min-height:100dvh;
 }
 a{color:inherit}
 
 /* ---- sidebar -------------------------------------------------------- */
 nav{
   background:var(--s1);border-right:1px solid var(--line);
-  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;position:sticky;top:0;height:100dvh;
 }
 .brand{padding:20px 18px 18px;border-bottom:1px solid var(--line);display:flex;
   align-items:center;gap:11px}
@@ -145,7 +145,8 @@ button.go:hover{filter:brightness(1.1)}
 button.go:active{transform:translateY(1px)}
 button.go[disabled]{opacity:.35;cursor:not-allowed;filter:none;transform:none}
 button.ghost{background:var(--s2);border:1px solid var(--line2);color:var(--steel);font:inherit;
-  font-size:12.5px;padding:9px 15px;border-radius:5px;cursor:pointer;transition:all .13s}
+  font-size:12.5px;padding:9px 15px;border-radius:5px;cursor:pointer;
+  transition:border-color .13s,color .13s}
 button.ghost:hover{border-color:var(--steel);color:var(--ink)}
 button.danger{border-color:#6b2f28;color:var(--bad)}
 
@@ -163,7 +164,8 @@ button.danger{border-color:#6b2f28;color:var(--bad)}
 
 .mgrid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(275px,1fr))}
 .mcard{background:var(--s1);border:1px solid var(--line);border-radius:6px;padding:12px 14px;
-  display:flex;gap:11px;align-items:flex-start;cursor:pointer;transition:all .13s}
+  display:flex;gap:11px;align-items:flex-start;cursor:pointer;
+  transition:border-color .13s,background .13s}
 .mcard:hover{border-color:var(--line2)}
 .mcard.sel{border-color:var(--orange);background:#1a1410}
 .mcard.no{opacity:.38;cursor:not-allowed}
@@ -175,7 +177,7 @@ button.danger{border-color:#6b2f28;color:var(--bad)}
 
 .modes{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .mode{background:var(--s1);border:1px solid var(--line);border-radius:7px;padding:15px;
-  cursor:pointer;transition:all .13s}
+  cursor:pointer;transition:border-color .13s,background .13s}
 .mode:hover{border-color:var(--line2)}
 .mode.sel{border-color:var(--orange);background:#1a1410}
 .mode .t{font-size:14px;font-weight:600;margin-bottom:3px}
@@ -184,7 +186,8 @@ button.danger{border-color:#6b2f28;color:var(--bad)}
 
 .tchips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{border:1px solid var(--line);background:var(--s2);color:var(--steel);border-radius:5px;
-  padding:8px 13px;font:inherit;font-size:12px;cursor:pointer;transition:all .13s}
+  padding:8px 13px;font:inherit;font-size:12px;cursor:pointer;
+  transition:border-color .13s,color .13s,background .13s}
 .chip[aria-pressed="true"]{border-color:var(--orange);color:var(--hot);background:#1e1610}
 .chip:hover{border-color:var(--steel)}
 
@@ -373,7 +376,7 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
 <section class="page" id="p-live">
   <div class="head"><div><h2>Running</h2><p id="liveof"></p></div></div>
   <div class="runhead">
-    <div class="ic">⚡</div>
+    <div class="ic">▶</div>
     <div><div class="t" id="lphase">starting</div><div class="s" id="lsub"></div></div>
     <div class="acts">
       <button class="ghost danger" id="stop">Stop</button>
@@ -771,9 +774,9 @@ function fitDraw(){
   var b=segs(Array.from(S.fit),'fitbudget','fitr');
   var names=Array.from(S.fit).map(sh).join(' + ')||'nothing';
   $('fitverdict').innerHTML = b.used>100
-    ? '<span class="nofit">✕ Does not fit.</span> '+esc(names)+' wants '+b.used
+    ? '<span class="nofit">Does not fit.</span> '+esc(names)+' wants '+b.used
       +' units and the box has 100. Drop something, or run them one at a time.'
-    : '<span class="fits">✓ Fits.</span> '+esc(names)+' takes '+b.used+' of 100 units, leaving '
+    : '<span class="fits">Fits.</span> '+esc(names)+' takes '+b.used+' of 100 units, leaving '
       +b.free+'. They can all be resident at once, though the device still runs one '
       +'inference at a time.';
 }
