@@ -231,6 +231,39 @@ class TestChartsFit(unittest.TestCase):
         self.assertLess(max(bars) + longest * 6.7, width + 1,
                         "the longest label does not fit after its bar")
 
+    def test_the_longest_name_clears_the_start_of_its_own_bar(self):
+        # The gutter was capped at 200px, which fitted every name but the
+        # longest, and that one ran under its own bar with its tail
+        # unreadable. Shrinking the font or truncating the name would hide the
+        # thing a reader is scanning for, so the gutter grows instead.
+        longest = "Qwen3-Coder-30B-A3B-Instruct-Turbo"
+        rows = [(longest, 0.54, "29 tok/s on 55u"), ("Qwen3-8B", 0.74, "21 on 28u")]
+        svg = report.hbars(rows, w=880, unit=" tok/s per unit", fmt="{:.2f}")
+        gutter = float(re.search(r'<text x="([\d.]+)"[^>]*text-anchor="end"', svg).group(1))
+        bar_x = float(re.search(r'<rect x="([\d.]+)"', svg).group(1))
+        self.assertGreater(gutter, len(longest) * 7.2,
+                           "the longest label does not fit in its gutter")
+        self.assertGreaterEqual(bar_x, gutter, "a bar starts inside the name gutter")
+
+    def test_the_rows_are_padded_the_same_top_and_bottom(self):
+        rows = [("a", 1.0, ""), ("b", 2.0, ""), ("c", 3.0, "")]
+        svg = report.hbars(rows, w=660)
+        height = float(re.search(r'viewBox="0 0 \d+ ([\d.]+)', svg).group(1))
+        bars = [(float(y), float(h)) for y, h in
+                re.findall(r'<rect x="[\d.]+" y="([\d.]+)"[^>]*height="([\d.]+)"', svg)]
+        top = bars[0][0]
+        bottom = height - (bars[-1][0] + bars[-1][1])
+        self.assertLess(abs(top - bottom), 3,
+                        f"first row sits {top:.1f} from the top, last {bottom:.1f} "
+                        f"from the bottom")
+
+    def test_the_value_and_its_note_are_separated(self):
+        # "0.95 tok/s per unit 30 tok/s on 32u" is three numbers with nothing
+        # between them and parses as one figure at a glance.
+        svg = report.hbars([("m", 0.95, "30 tok/s on 32u")], unit=" tok/s per unit",
+                           fmt="{:.2f}")
+        self.assertIn("&#183;", svg)
+
     def test_the_many_model_chart_thins_its_tick_labels(self):
         # Twelve models asked for twelve slightly different prompt lengths, and
         # a tick for each was an unreadable smear.

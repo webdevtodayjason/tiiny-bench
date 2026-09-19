@@ -361,37 +361,49 @@ def hbars(rows, w=660, unit="", fmt="{:.1f}", colours=None, rowh=30):
     bar, which is the whole reason this exists: sixteen names under sixteen
     columns is a smear.
 
+    Three things this has to get right, each learned by getting it wrong.
+
+    The name gutter is sized to the WIDEST label in the set, not to a typical
+    one. It was capped at 200px, which fitted every name but the longest, and
+    the longest then ran under the start of its own bar with its tail
+    unreadable. Shrinking the font or truncating the name would both hide the
+    thing a reader is scanning for, so the gutter grows instead and the track
+    gives up the room.
+
+    Labels are right-aligned into that gutter, so every bar starts at the same
+    x and the names end in a clean edge against them.
+
     The value and its note are drawn one after the other at the end of the bar
-    rather than at opposite ends of the row, and the bars are scaled to leave
-    room for the longest of them. Putting the note hard right let a long value
-    label run straight into it, which is the same unreadable smear moved.
+    rather than at opposite ends of the row, separated by a middot: three
+    numbers in a row with only spaces between them parse as one figure.
     """
     if not rows:
         return ""
-    pad_l, pad_t, pad_b = 8, 10, 20
-    h = pad_t + pad_b + rowh * len(rows)
-    label_w = max(96, min(200, 8 + 7.0 * max(len(str(l)) for l, _, _ in rows)))
     # Monospace, so a character really is a fixed width and this arithmetic
-    # holds rather than approximating.
-    ch = 6.7
-    tail = max(len(fmt.format(v) + unit + ("  " + n if n else ""))
-               for _, v, n in rows) * ch + 16
-    x0 = pad_l + label_w
+    # holds rather than approximating. 12px is the .hlab size in the stylesheet.
+    ch_label, ch_val = 7.25, 6.7
+    pad = 14
+    h = pad * 2 + rowh * len(rows)
+    gutter = 10 + ch_label * max(len(str(l)) for l, _, _ in rows)
+    tail = max(len(fmt.format(v) + unit + (" \u00b7 " + n if n else ""))
+               for _, v, n in rows) * ch_val + 18
+    x0 = gutter + 12
     track = max(60, w - x0 - tail)
     vmax = max(v for _, v, _ in rows) or 1
     o = [f'<svg viewBox="0 0 {w} {h}" class="chart" role="img" '
          f'aria-label="{html.escape(unit.strip() or "comparison")}">']
     for i, (lab, v, note) in enumerate(rows):
-        y = pad_t + i * rowh
+        y = pad + i * rowh
         col = (colours or {}).get(lab) or C["copper"]
         bw = max(_scale(v, 0, vmax, 0, track), 1)
-        o.append(f'<text x="{pad_l}" y="{y+rowh*0.64:.1f}" class="tick hlab">'
-                 f'{html.escape(str(lab))}</text>')
+        o.append(f'<text x="{gutter:.1f}" y="{y+rowh*0.64:.1f}" text-anchor="end" '
+                 f'class="tick hlab">{html.escape(str(lab))}</text>')
         o.append(f'<rect x="{x0:.1f}" y="{y+rowh*0.2:.1f}" width="{bw:.1f}" '
                  f'height="{rowh*0.56:.1f}" fill="{col}" opacity=".9" rx="2"/>')
         o.append(f'<text x="{x0+bw+8:.1f}" y="{y+rowh*0.64:.1f}" class="val">'
                  f'{fmt.format(v)}{html.escape(unit)}'
-                 + (f'<tspan class="dim">  {html.escape(note)}</tspan>' if note else "")
+                 + (f'<tspan class="dim"> &#183; {html.escape(note)}</tspan>'
+                    if note else "")
                  + '</text>')
     o.append("</svg>")
     return "".join(o)
