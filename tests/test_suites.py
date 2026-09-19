@@ -588,3 +588,28 @@ class WavEnvelope(unittest.TestCase):
         self.assertIsNone(bench._as_wav(b'{"session_id":"sess-1"}'))
         self.assertIsNone(bench._as_wav({"_error": "HTTP Error 400"}))
         self.assertIsNone(bench._as_wav(b"not json at all"))
+
+
+# -------------------------------------------------- refused request fields
+class RejectedField(unittest.TestCase):
+    """SongGeneration-v2-large refuses the duration Foundation-1 requires.
+    The refusal names the field, so the benchmark reads it rather than
+    carrying a per-model table of which keys are allowed."""
+
+    BODY = ('{"audio_data":null,"audio_format":"wav","channels":0,'
+            '"duration":0.0,"error":"Extra inputs are not permitted in '
+            'request: duration","error_code":"INVALID_REQUEST"}')
+
+    def test_names_the_field_from_a_real_400(self):
+        v = {"_error": "HTTP Error 400: Bad Request", "_status": 400,
+             "_body": self.BODY, "_ctype": "application/json"}
+        self.assertEqual(bench._rejected_field(v), "duration")
+
+    def test_a_different_400_names_nothing(self):
+        self.assertIsNone(bench._rejected_field(
+            {"_status": 400, "_body": '{"error":"model is busy"}'}))
+
+    def test_only_a_400_is_read_this_way(self):
+        self.assertIsNone(bench._rejected_field(
+            {"_status": 500, "_body": self.BODY}))
+        self.assertIsNone(bench._rejected_field(b"raw bytes"))

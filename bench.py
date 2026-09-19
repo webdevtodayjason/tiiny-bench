@@ -1554,6 +1554,22 @@ def t_image(tok, model):
     return {"runs": rows, "s_per_image": round(med, 2)}
 
 
+def _rejected_field(v):
+    """The field name a 400 says it would not accept, if it says one.
+
+    The music service does not agree with itself across models: Foundation-1
+    takes a duration, SongGeneration-v2-large answers 400 with "Extra inputs
+    are not permitted in request: duration". Rather than keep a table of which
+    model takes which key, the request is sent once and the refusal is read.
+    """
+    if not isinstance(v, dict) or v.get("_status") != 400:
+        return None
+    blob = str(v.get("_body") or "")
+    m = re.search(r"[Ee]xtra inputs are not permitted in request:\s*([A-Za-z_][A-Za-z0-9_]*)",
+                  blob)
+    return m.group(1) if m else None
+
+
 def _as_wav(raw):
     """A WAV out of whatever shape the device chose to answer in.
 
@@ -1657,6 +1673,10 @@ def t_embed(tok, model):
                 {"model": model, "input": batch}, timeout=180)
         wall = time.time() - t0
         if "_error" in v:
+            if not_loaded(v):
+                say("    no embedding model is resident; nothing to measure")
+                return not_measured("no Text Embedding model was resident on the device")
+            capture("embed", gw("/v1/embeddings"), v)
             say(f"    batch {n:>3} FAILED {v['_error'][:55]}"); continue
         data = v.get("data") or []
         dim = len((data[0] or {}).get("embedding") or []) if data else 0
@@ -2305,6 +2325,12 @@ def t_music(tok, model):
         body = {"model": model, "prompt": MUSIC_PROMPT,
                 "duration": want, "format": "wav"}
         raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
+        drop = _rejected_field(raw)
+        if drop and drop in body:
+            say(f"    this model will not take {drop}; asking again without it")
+            body.pop(drop)
+            t0 = time.time()
+            raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
         audio, how = _as_wav(raw), None
         if audio:
             how = "direct"
