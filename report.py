@@ -534,6 +534,39 @@ def model_section(run, idx, colour=None):
         ratio = th["on"]["wall_s"] / th["off"]["wall_s"]
         cards.append(stat(f'{ratio:.1f}<span class="u">x</span>', "reasoning tax",
                           "wall clock, thinking on against off"))
+    # The other nine classes. Thirty-two of the fifty-two models on this box
+    # are not chat models, and until now every one of them appeared here with
+    # a header, a provenance line and no number at all: the figures existed in
+    # the Markdown export and nowhere on the page.
+    for key, unit, fmt, lab, note in (
+            ("image",  "s_per_image", "{:.2f}<span class=\"u\">s</span>",
+             "per illustration", "512 by 512, eight steps"),
+            ("speech", "rtf", "{:.2f}<span class=\"u\">x</span>",
+             "real time", "seconds of speech per second of wall clock"),
+            ("asr",    "rtf", "{:.2f}<span class=\"u\">x</span>",
+             "real time", "seconds of audio transcribed per second"),
+            ("music",  "audio_per_s", "{:.2f}<span class=\"u\">x</span>",
+             "real time", "seconds of music per second of wall clock"),
+            ("embed",  "emb_per_s", "{:.1f}<span class=\"u\">/s</span>",
+             "embeddings", "best of one, eight and thirty-two at a time"),
+            ("ocr",    "s_per_page", "{:.2f}<span class=\"u\">s</span>",
+             "per page", "one page of digits, read back and checked"),
+            ("rerank", "pairs_per_s", "{:.1f}<span class=\"u\">/s</span>",
+             "pairs scored", "query against documents, all at once")):
+        blk = r.get(key) or {}
+        if isinstance(blk, dict) and blk.get(unit) is not None:
+            extra = note
+            if key == "embed" and blk.get("dim"):
+                extra = f'{blk["dim"]} wide, ' + note
+            if key == "speech" and blk.get("voice"):
+                extra = f'voice {blk["voice"]}, ' + note
+            if key == "ocr" and blk.get("correct") is not None:
+                extra = (f'{blk["correct"]} of {len(blk.get("runs") or [])} '
+                         f'read correctly, ' + note)
+            cards.append(stat(fmt.format(blk[unit]), lab, extra))
+        elif isinstance(blk, dict) and blk.get("not_measured"):
+            cards.append(stat('<span class="u">not measured</span>', key,
+                              blk["not_measured"]))
     if cards:
         parts.append('<div class="stats">' + "".join(cards) + "</div>")
 
