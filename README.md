@@ -33,8 +33,27 @@ install.
 | **Concurrency** | 1, 2, 4 and 8 identical requests fired at once. Aggregate throughput against per-stream throughput. |
 | **Reasoning cost** | The same question with thinking off and then on. The ratio is wall time, because that is what a person waits. |
 
+Those four are for the models that hold a conversation, and they are a choice: pick any
+combination. Every other class the box ships has one test and runs it, so there is nothing
+to pick.
+
+| Class | Test | The figure |
+|---|---|---|
+| **Text-to-Image** | Three 512x512 plates at 8 steps. | seconds per plate |
+| **Text-to-Speech** | Three passages spoken, duration read off the WAV header. | times faster than real time |
+| **Text Embedding** | Batches of 1, 8 and 32. | embeddings per second |
+| **ASR** | Clips of 2, 5 and 10 seconds transcribed. | times faster than real time |
+| **Image-to-Text** | A generated page of digits read three times, through the OCR gateway or through chat completions, whichever answers. | seconds per page |
+| **Music Generation** | 8 and 16 seconds asked for, blocking or polled. | seconds of audio per second of wall clock |
+| **Text Reranking** | 4, 16 and 64 passages scored against one query. | query-document pairs per second |
+
+The audio clip and the page of digits are generated in code, not committed: a fixture you
+cannot diff is one you cannot trust when a number moves.
+
 **What it does not measure: quality.** Nothing here says a model is good, only how fast it
-is. A fast wrong answer is still wrong.
+is. A fast wrong answer is still wrong. The two exceptions are small and free: page reading
+says whether the digits came back, and reranking says whether the passage that answers the
+query ranked first, because a reranker that is fast and wrong is worth knowing about.
 
 ---
 
@@ -214,6 +233,13 @@ you. Take the serial it printed and pass `--serial`, or pass `--host`.
 **Numbers that do not match an older run.** Check the `connection` block in both result files.
 The same box measured over USB and over the LAN vhost are two different measurements, and the
 result file records which one each was.
+
+**Every inference fails but the box is plainly there.** The address and the transport are
+cached, and a cached one can go stale: the gateway moved from port 8800 to port 80 in TiinyOS
+1.0.0, and a saved 8800 keeps being re-chosen. Detect again does not help, because it prefers
+what it already has. Restart the app, which makes it negotiate the transport from scratch.
+`./tiiny-bench --where` prints the port and vhost it settled on, and a result file records the
+same thing in its `connection` block.
 
 **A model fails to load during a sweep.** It is recorded as a failure and the sweep carries
 on. The box has 100 NPU units and some models want most of them, so make room first if you

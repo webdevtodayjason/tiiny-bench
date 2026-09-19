@@ -580,7 +580,9 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <div class="card" style="margin-top:16px"><div class="hd">Tests</div>
       <div class="bd"><div class="tchips" id="tests"></div>
       <p class="note">Each test is a real measurement, not a score. Nothing here judges output
-        quality: a fast wrong answer is still wrong.</p></div></div>
+        quality: a fast wrong answer is still wrong. These four are the choice a text model
+        has; every other class has one test and runs it.</p>
+      <div id="plan"></div></div></div>
   </div>
 
   <div id="w3" hidden>
@@ -846,7 +848,16 @@ document.addEventListener('keydown', function(e){
   if(e.key==='Enter') askClose(true);
 });
 
-var CHAT = {"Text Generation":1,"Image-Text-to-Text":1};
+/* Which classes can be measured comes from the server with the catalogue, not
+   from a list kept here. This used to be {"Text Generation":1,
+   "Image-Text-to-Text":1}, which was narrower than the benchmark's own list and
+   greyed out every image, speech and embedding model even though all three had
+   tests. Empty until /api/catalog answers. */
+var LABEL = {prefill:"prefill scaling", sustained:"sustained generation",
+             concurrency:"concurrency", thinking:"reasoning cost",
+             image:"illustration", speech:"speech", embed:"embeddings",
+             asr:"transcription", ocr:"page reading", music:"music",
+             rerank:"reranking"};
 var TESTS = [["prefill","prefill scaling","how a long prompt scales"],
              ["sustained","sustained generation","1500 tokens unbroken"],
              ["concurrency","concurrency","1, 2, 4 and 8 at once"],
@@ -857,7 +868,46 @@ var MODES = [
   ["full","Full suite","prefill,sustained,concurrency,thinking","Everything. The honest one."]
 ];
 var S = {cat:[], live:[], picked:new Set(), tests:new Set(["prefill","sustained","concurrency","thinking"]),
-         mode:"full", step:1, running:false, board:null, fit:new Set()};
+         mode:"full", step:1, running:false, board:null, fit:new Set(),
+         suites:{}, metrics:{}};
+
+/* What a model will actually be measured on. The same rule the benchmark
+   applies server side: the chosen tests narrowed to the ones that mean
+   something for this class, and the whole class suite when that leaves
+   nothing. A Text-to-Image model picked alongside a chat model runs its own
+   test rather than refusing "thinking". */
+function suiteFor(type){ return S.suites[type] || []; }
+/* Can this class be benchmarked at all. */
+function measurable(type){ return suiteFor(type).length > 0; }
+/* Can this class answer a chat completion. A narrower question, and the one the
+   Chat page asks: an OCR model is measurable and will not hold a conversation. */
+var CHAT_CLASSES = {"Text Generation":1, "Image-Text-to-Text":1};
+function chattable(type){ return !!CHAT_CLASSES[type]; }
+function plannedFor(type){
+  var allowed = suiteFor(type);
+  var chosen = allowed.filter(function(t){ return S.tests.has(t); });
+  return chosen.length ? chosen : allowed;
+}
+function plannedTotal(){
+  var n = 0;
+  S.picked.forEach(function(id){
+    var m = S.cat.filter(function(x){ return x.id === id; })[0];
+    if (m) n += plannedFor(m.type).length;
+  });
+  return n;
+}
+/* The picked models grouped by class, for the lines that say what will run. */
+function pickedClasses(){
+  var out = [];
+  S.picked.forEach(function(id){
+    var m = S.cat.filter(function(x){ return x.id === id; })[0];
+    if (!m) return;
+    var row = out.filter(function(r){ return r.type === m.type; })[0];
+    if (!row) { row = {type:m.type, models:[], tests:plannedFor(m.type)}; out.push(row); }
+    row.models.push(id);
+  });
+  return out;
+}
 
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
 function sh(m){ return (m||'').split('/').pop(); }
@@ -915,9 +965,11 @@ function catalog(){
   return j('/api/catalog').then(function(d){
     if (d.error){ $('mgrid').innerHTML='<div class="err">'+esc(d.error)+'</div>'; return; }
     S.cat = d.models||[]; S.live = d.running||[];
+    S.suites = d.suites||{}; S.metrics = d.metrics||{};
     $('host').textContent = d.host||'?';
     S.picked = new Set(S.live.filter(function(m){
-      var c=S.cat.filter(function(x){return x.id===m;})[0]; return c && CHAT[c.type]; }));
+      var c=S.cat.filter(function(x){return x.id===m;})[0];
+      return c && measurable(c.type); }));
     S.fit = new Set(S.live);
     mgrid();
   });
@@ -1174,7 +1226,7 @@ function models(){
         +'<td class="num">'+esc(m.npu_usage==null?'-':m.npu_usage)+'</td>'
         +'<td style="color:var(--steel)">'+esc(m.type||'-')+'</td>'
         +'<td>'+(on?'<span class="pill live">loaded</span>':'')
-               +(CHAT[m.type]?'':' <span class="pill">not measurable</span>')+'</td>'
+               +(measurable(m.type)?'':' <span class="pill">not measurable</span>')+'</td>'
         +'<td style="text-align:right;white-space:nowrap">'
         +(b? '<span class="pill">'+esc(b)+'&hellip;</span>'
            : (on? mbtn('unload',m.id,'Unload') : mbtn('load',m.id,'Load'))
@@ -1270,14 +1322,16 @@ function mgrid(){
   var q=($('msearch').value||'').toLowerCase();
   var list=S.cat.filter(function(m){ return !q || m.id.toLowerCase().indexOf(q)>=0; });
   $('mgrid').innerHTML=list.map(function(m){
-    var ok=!!CHAT[m.type], on=S.picked.has(m.id), live=S.live.indexOf(m.id)>=0;
+    var ok=measurable(m.type), on=S.picked.has(m.id), live=S.live.indexOf(m.id)>=0;
     return '<label class="mcard'+(on?' sel':'')+(ok?'':' no')+'" data-m="'+esc(m.id)+'">'
       +'<input type="checkbox"'+(on?' checked':'')+(ok?'':' disabled')+'>'
       +'<div style="flex:1"><div class="t">'+esc(sh(m.id))
       +(live?' <span class="pill live">loaded</span>':'')+'</div>'
       +'<div class="m"><b>'+esc(m.params||'?')+'</b><span>'+esc(m.npu_usage||'?')+'u</span>'
       +'<span>'+(((m.total_size||0)/1e9).toFixed(1))+' GB</span>'
-      +(ok?'':'<span style="color:var(--bad)">'+esc(m.type)+' · not a chat model</span>')
+      +'<span style="color:var(--steel)">'+esc(m.type)+'</span>'
+      +(ok?'<span>'+esc(plannedFor(m.type).map(function(t){return LABEL[t]||t;}).join(', '))+'</span>'
+          :'<span style="color:var(--bad)">no test for this class yet</span>')
       +'</div></div></label>';
   }).join('')||'<div class="empty">nothing matches</div>';
   wiz();
@@ -1291,9 +1345,10 @@ $('mgrid').addEventListener('click', function(e){
 $('msearch').addEventListener('input', mgrid);
 $('selloaded').addEventListener('click', function(){
   S.picked=new Set(S.live.filter(function(m){
-    var c=S.cat.filter(function(x){return x.id===m;})[0]; return c&&CHAT[c.type]; })); mgrid(); });
+    var c=S.cat.filter(function(x){return x.id===m;})[0];
+    return c&&measurable(c.type); })); mgrid(); });
 $('selall').addEventListener('click', function(){
-  S.picked=new Set(S.cat.filter(function(m){return CHAT[m.type];}).map(function(m){return m.id;}));
+  S.picked=new Set(S.cat.filter(function(m){return measurable(m.type);}).map(function(m){return m.id;}));
   mgrid(); });
 $('selnone').addEventListener('click', function(){ S.picked=new Set(); mgrid(); });
 
@@ -1316,7 +1371,26 @@ function draw2(){
     return '<button class="chip" data-t="'+t[0]+'" aria-pressed="'+(S.tests.has(t[0])?'true':'false')
       +'" title="'+esc(t[2])+'">'+t[1]+'</button>';
   }).join('');
+  drawPlan();
   wiz();
+}
+
+/* What every picked class will be measured on. The chips above are the four
+   tests a text model has a choice about; a class with one test has no choice
+   and runs it, which is what this says rather than leaving someone to wonder
+   why a reranker ignored the boxes they ticked. */
+function drawPlan(){
+  var el=$('plan'); if(!el) return;
+  var rows=pickedClasses();
+  if(!rows.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="note" style="margin:14px 0 0">What each class will run</div>'
+    +'<table class="cov"><tbody>'+rows.map(function(r){
+      var one=suiteFor(r.type).length===1;
+      return '<tr><td>'+esc(r.type)+'</td>'
+        +'<td style="color:var(--dim)">'+r.models.length+' picked</td>'
+        +'<td>'+esc(r.tests.map(function(t){return LABEL[t]||t;}).join(', '))
+        +(one?' <span class="pill">its only test</span>':'')+'</td></tr>';
+    }).join('')+'</tbody></table>';
 }
 $('tests').addEventListener('click', function(e){
   var b=e.target.closest('.chip'); if(!b) return;
@@ -1330,7 +1404,7 @@ function impact(){
   var n=S.picked.size;
   var onlyLoaded = n>0 && Array.from(S.picked).every(function(m){return S.live.indexOf(m)>=0;})
                    && n===1;
-  var mins=Math.max(1, Math.round(n*S.tests.size*1.7));
+  var mins=Math.max(1, Math.round(plannedTotal()*1.7));
   if(onlyLoaded){
     return '<span class="ti">Nothing on your box changes</span>This model is already loaded, so '
       +'the suite will not load, unload or restart anything. Expect about <b>'+mins+' minutes</b>.';
@@ -1351,21 +1425,25 @@ function wiz(){
   $('w1').hidden=S.step!==1; $('w2').hidden=S.step!==2; $('w3').hidden=S.step!==3;
   $('back').hidden=S.step===1;
   $('next').textContent=S.step===3?'Run benchmark':'Continue';
+  /* Counted over what will actually run, not models times ticked boxes: a
+     reranker runs one test whatever the chips say, and the old arithmetic
+     quoted an hour for a job that takes a minute. */
+  var runs = plannedTotal();
   $('runcount').innerHTML='<span class="note" style="margin:0">'+S.picked.size+' model'
-    +(S.picked.size===1?'':'s')+' · '+S.tests.size+' test'+(S.tests.size===1?'':'s')+'</span>';
-  var ok = S.picked.size>0 && S.tests.size>0;
+    +(S.picked.size===1?'':'s')+' · '+runs+' test'+(runs===1?'':'s')+' to run</span>';
+  var ok = S.picked.size>0 && runs>0;
   $('next').disabled = !ok || S.running;
   $('wizinfo').innerHTML = !S.picked.size ? 'Pick at least one model.'
-    : !S.tests.size ? 'Pick at least one test.'
-    : '<b>'+S.picked.size+'</b> model'+(S.picked.size===1?'':'s')+' × <b>'+S.tests.size+'</b> test'
-      +(S.tests.size===1?'':'s')+' ≈ <b>'+Math.max(1,Math.round(S.picked.size*S.tests.size*1.7))
-      +' min</b>';
+    : !runs ? 'Nothing picked can be measured yet.'
+    : '<b>'+S.picked.size+'</b> model'+(S.picked.size===1?'':'s')+' · <b>'+runs+'</b> test'
+      +(runs===1?'':'s')+' ≈ <b>'+Math.max(1,Math.round(runs*1.7))+' min</b>';
   if(S.step===3){
     $('impact').innerHTML=impact();
     $('review').innerHTML=
       stat('▣', String(S.picked.size), 'models', Array.from(S.picked).map(sh).join(', ').slice(0,60))
-      +stat('◉', String(S.tests.size), 'tests', Array.from(S.tests).join(', '))
-      +stat('◷', Math.max(1,Math.round(S.picked.size*S.tests.size*1.7))+'<small>min</small>',
+      +stat('◉', String(runs), 'tests', pickedClasses().map(function(r){
+            return r.type+': '+r.tests.join(', '); }).join(' · ').slice(0,90))
+      +stat('◷', Math.max(1,Math.round(runs*1.7))+'<small>min</small>',
             'estimated', 'checkpointed after every model');
   }
 }
@@ -2042,7 +2120,7 @@ function statsBar(stats){
 
 /* ---- the model picker and the model card ------------------------------ */
 function chatModels(){
-  return S.cat.filter(function(m){ return CHAT[m.type] && S.live.indexOf(m.id) >= 0; });
+  return S.cat.filter(function(m){ return chattable(m.type) && S.live.indexOf(m.id) >= 0; });
 }
 function fillChatModels(){
   var select = $('chat-model'), previous = select.value, note = $('chat-route');
@@ -2214,7 +2292,7 @@ function paintInstances(payload){
 function fillLoadModels(){
   var select = $('load-model');
   var rows = S.cat.filter(function(m){
-    return CHAT[m.type] && S.live.indexOf(m.id) < 0;
+    return chattable(m.type) && S.live.indexOf(m.id) < 0;
   });
   var shape = rows.map(function(r){ return r.id; }).join(',');
   if (shape === loadShape) return;

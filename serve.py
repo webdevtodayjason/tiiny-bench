@@ -763,9 +763,18 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/catalog":
             try:
                 tok = bench.key()
+                # The suites travel with the catalogue so the page does not
+                # keep its own copy of which classes can be measured. It kept
+                # one, it was narrower than the benchmark's, and it greyed out
+                # every model that was not a chat model even after the other
+                # classes had tests.
                 return self._json({"models": bench.catalog(tok),
                                    "running": bench.running(tok),
-                                   "host": bench.HOST})
+                                   "host": bench.HOST,
+                                   "suites": bench.SUITES,
+                                   "metrics": {c: {"unit": u, "means": m}
+                                               for c, (_, u, m)
+                                               in bench.CLASS_METRIC.items()}})
             except SystemExit as e:
                 return self._json({"error": str(e)}, 503)
             except Exception as e:  # noqa: BLE001

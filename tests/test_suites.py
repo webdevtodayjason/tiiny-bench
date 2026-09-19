@@ -15,15 +15,18 @@ is that the fixtures are generated rather than committed and are byte for byte
 the same every run: a number that moves between runs has to be the device
 moving, not the input.
 """
+import json
 import os
 import pathlib
 import statistics
 import sys
+import threading
 import unittest
 import wave
 import zlib
 import struct
 import io
+from http.server import ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -401,6 +404,53 @@ class TestTheReportScoresTheNewClasses(DeviceCase):
             self.assertIn((key, names[0]), serve.HEADLINE,
                           f"{cls}'s figure is never read off a record")
         self.assertEqual(sorted(k for k, _ in serve.HEADLINE).count("rtf"), 2)
+
+
+class TestTheRunPageIsOfferedEveryClass(DeviceCase):
+    """The page must not keep its own idea of which classes can be measured.
+
+    It kept one: var CHAT = {"Text Generation":1,"Image-Text-to-Text":1}. That
+    was narrower than the benchmark's own list even before this, so a run page
+    served next to working image, speech and embedding tests greyed out every
+    model that could use them. The list travels with the catalogue now.
+    """
+
+    loaded = [RERANK]
+
+    def test_the_catalogue_carries_the_suites_and_the_units(self):
+        import serve
+        import urllib.request
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), serve.Handler)
+        srv.daemon_threads = True
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.server_close)
+        self.addCleanup(srv.shutdown)
+        with urllib.request.urlopen(
+                "http://127.0.0.1:%d/api/catalog" % srv.server_address[1],
+                timeout=20) as r:
+            body = json.load(r)
+        self.assertEqual(body["suites"], bench.SUITES)
+        for cls, (_, unit, means) in bench.CLASS_METRIC.items():
+            self.assertEqual(body["metrics"][cls], {"unit": unit, "means": means})
+
+    def test_the_page_does_not_keep_a_second_list_of_measurable_classes(self):
+        page = pathlib.Path(ROOT, "static", "app.html").read_text(encoding="utf-8")
+        self.assertNotIn('var CHAT = {"Text Generation"', page)
+        self.assertIn("S.suites = d.suites", page,
+                      "the page must take the suites from the catalogue")
+        # The Chat page still asks the narrower question, and should: an OCR
+        # model is measurable and will not hold a conversation.
+        self.assertIn("function chattable(", page)
+        self.assertIn("function measurable(", page)
+
+    def test_a_non_chat_model_plans_its_own_test_rather_than_the_ticked_ones(self):
+        # The page applies the same rule the benchmark does, so what it says
+        # will run is what runs. A Text-to-Image model cannot run "thinking".
+        rec = bench.suite(bench.key(), RERANK,
+                          ["prefill", "sustained", "concurrency", "thinking"],
+                          {"type": "Text Reranking"})
+        self.assertEqual(sorted(rec["results"]), ["rerank"])
+        self.assertIsNotNone(rec["results"]["rerank"])
 
 
 if __name__ == "__main__":
