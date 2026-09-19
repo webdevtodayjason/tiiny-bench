@@ -38,7 +38,7 @@ import urllib.request
 import os
 import zlib
 
-VERSION = "0.1.8"
+VERSION = "0.1.9"
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "bench-results"
