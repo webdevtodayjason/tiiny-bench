@@ -613,3 +613,18 @@ class RejectedField(unittest.TestCase):
         self.assertIsNone(bench._rejected_field(
             {"_status": 500, "_body": self.BODY}))
         self.assertIsNone(bench._rejected_field(b"raw bytes"))
+
+
+class QualifiedCaptureKeys(unittest.TestCase):
+    """A test may record more than one refusal. OCR records both the gateway's
+    404 and the chat fallback's 400, and the pair is the finding, so a
+    qualified key has to survive the filter that trims captures to the tests
+    that actually ran."""
+
+    def test_qualified_key_survives_the_filter(self):
+        todo = ["ocr"]
+        caps = {"ocr": {"note": "a"}, "ocr fallback": {"note": "b"},
+                "music": {"note": "c"}}
+        kept = {k: v for k, v in caps.items()
+                if k in todo or k.split()[0] in todo}
+        self.assertEqual(sorted(kept), ["ocr", "ocr fallback"])

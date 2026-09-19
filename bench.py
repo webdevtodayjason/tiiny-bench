@@ -2255,9 +2255,12 @@ def t_ocr(tok, model):
                 # Both paths failed. Record the second one too: printing only
                 # the gateway's 404 hides why the fallback did not work, and
                 # the fallback is the path a vision model would have taken.
-                capture("ocr", gw("/v1/chat/completions"), c,
-                        "the /v1/ocr route refused it and the chat fallback "
-                        "refused it as well")
+                # A separate key, not "ocr": capture keeps the first record
+                # per key, so filing both refusals under one name would throw
+                # away whichever arrived second, and the pair is the finding.
+                capture("ocr fallback", gw("/v1/chat/completions"), c,
+                        "the chat fallback refused it too, so there is no "
+                        "route left to read a page with")
         wall = time.time() - t0
         if text is None:
             if not_loaded(r):
@@ -2500,7 +2503,11 @@ def suite(tok, model, want, meta, cat=None):
         emit("test", model=model, test=name, index=i, total=len(todo))
         results[name] = TESTS[name](tok, model)
         emit("test_done", model=model, test=name, index=i, total=len(todo))
-    unparsed = {k: v for k, v in UNPARSED.items() if k in todo}
+    # Keys may be a test name or a test name plus a qualifier ("ocr
+    # fallback"), so match on the first word rather than the whole key,
+    # or a second capture from the same test silently vanishes here.
+    unparsed = {k: v for k, v in UNPARSED.items()
+                if k in todo or k.split()[0] in todo}
     return {
         "model": model,
         "params": meta.get("params"),

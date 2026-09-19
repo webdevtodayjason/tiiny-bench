@@ -1,0 +1,5712 @@
+{
+  "label": "full-catalog-19sep",
+  "stamp": "20260919-124921",
+  "build": "0.1.34",
+  "host": "172.17.7.177",
+  "suite_version": 2,
+  "bench_version": "0.1.9",
+  "connection": {
+    "host": "172.17.7.177",
+    "source": "TIINY_BASE",
+    "plane": "given",
+    "serial": "TNYM26072400300011Q",
+    "gateway_transport": "vhost",
+    "gateway_port": 80,
+    "gateway_vhost": "p8800.api.tiiny",
+    "services": {
+      "gateway": "vhost",
+      "mgmt": "direct"
+    }
+  },
+  "firmware": {
+    "tiiny_os": "0.1.34",
+    "version": "0.1.30"
+  },
+  "models": [
+    {
+      "model": "Qwen/Qwen3-Coder-Next",
+      "params": "80B",
+      "type": "Text Generation",
+      "npu_usage": 94,
+      "total_size": 37697536035,
+      "context_window": null,
+      "elapsed_s": 247.3,
+      "npu_mem_total_mb": 10609,
+      "conditions_at_start": {
+        "at": "2026-09-19T12:50:39-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Coder-Next",
+            "npu_usage": 94
+          }
+        ],
+        "npu_units_used": 94,
+        "npu_units_free": 6,
+        "npu_util_pct": 54.01,
+        "npu_mem_used_mb": 3497,
+        "cpu_total_pct": 0.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 74.43,
+            "decode_tok_s": 40.5,
+            "prefill_ms": 913.6,
+            "ttft_s": 0.938,
+            "cached_tokens": 0,
+            "wall_s": 1.156
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 209.73,
+            "decode_tok_s": 39.58,
+            "prefill_ms": 1563.9,
+            "ttft_s": 1.589,
+            "cached_tokens": 0,
+            "wall_s": 1.747
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 390.77,
+            "decode_tok_s": 39.24,
+            "prefill_ms": 3869.3,
+            "ttft_s": 3.895,
+            "cached_tokens": 64,
+            "wall_s": 3.999
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 446.97,
+            "decode_tok_s": 37.36,
+            "prefill_ms": 10560.0,
+            "ttft_s": 10.587,
+            "cached_tokens": 1536,
+            "wall_s": 10.72
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 84.83,
+            "decode_tok_s": 20.14,
+            "prefill_ms": 483.3,
+            "ttft_s": 0.533,
+            "cached_tokens": 0,
+            "wall_s": 75.066
+          },
+          "telemetry_before": {
+            "npu_util_pct": 21.67,
+            "npu_mem_used_mb": 2350,
+            "npu_mem_total_mb": 11313,
+            "cpu_total_pct": 0.0
+          },
+          "telemetry_after": {
+            "npu_util_pct": 91.26,
+            "npu_mem_used_mb": 1334,
+            "npu_mem_total_mb": 6942,
+            "cpu_total_pct": 0.0
+          },
+          "during": {
+            "samples": 63,
+            "npu_util_peak": 98.67,
+            "npu_util_median": 54.0,
+            "npu_mem_peak_mb": 12758,
+            "npu_mem_total_mb": 11313
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 19.18,
+            "per_stream_tok_s": 20.49,
+            "wall_s": 8.34,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 19.54,
+            "per_stream_tok_s": 20.82,
+            "wall_s": 16.38,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 19.59,
+            "per_stream_tok_s": 20.79,
+            "wall_s": 32.67,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 19.63,
+            "per_stream_tok_s": 20.83,
+            "wall_s": 65.19,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 318,
+            "prefill_tok_s": 90.1,
+            "decode_tok_s": 20.77,
+            "prefill_ms": 455.0,
+            "ttft_s": 0.503,
+            "cached_tokens": 0,
+            "wall_s": 15.875
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 318,
+            "prefill_tok_s": 90.82,
+            "decode_tok_s": 20.83,
+            "prefill_ms": 451.5,
+            "ttft_s": 0.499,
+            "cached_tokens": 0,
+            "wall_s": 15.799
+          }
+        }
+      }
+    },
+    {
+      "model": "openai/gpt-oss-120b",
+      "params": "120B",
+      "type": "Text Generation",
+      "npu_usage": 99,
+      "total_size": 36813697569,
+      "context_window": null,
+      "elapsed_s": 285.3,
+      "npu_mem_total_mb": 9390,
+      "conditions_at_start": {
+        "at": "2026-09-19T12:56:04-0500",
+        "resident": [
+          {
+            "model": "openai/gpt-oss-120b",
+            "npu_usage": 99
+          }
+        ],
+        "npu_units_used": 99,
+        "npu_units_free": 1,
+        "npu_util_pct": 33.18,
+        "npu_mem_used_mb": 2416,
+        "cpu_total_pct": 27.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 127,
+            "out_tokens": 4,
+            "prefill_tok_s": 127.41,
+            "decode_tok_s": 20.33,
+            "prefill_ms": 996.8,
+            "ttft_s": 1.046,
+            "cached_tokens": 0,
+            "wall_s": 1.256
+          },
+          {
+            "prompt_tokens": 387,
+            "out_tokens": 4,
+            "prefill_tok_s": 321.92,
+            "decode_tok_s": 20.31,
+            "prefill_ms": 1012.7,
+            "ttft_s": 1.062,
+            "cached_tokens": 61,
+            "wall_s": 1.216
+          },
+          {
+            "prompt_tokens": 1635,
+            "out_tokens": 4,
+            "prefill_tok_s": 602.22,
+            "decode_tok_s": 17.32,
+            "prefill_ms": 2504.1,
+            "ttft_s": 2.562,
+            "cached_tokens": 127,
+            "wall_s": 2.758
+          },
+          {
+            "prompt_tokens": 6315,
+            "out_tokens": 4,
+            "prefill_tok_s": 580.71,
+            "decode_tok_s": 15.61,
+            "prefill_ms": 8506.8,
+            "ttft_s": 8.571,
+            "cached_tokens": 1375,
+            "wall_s": 8.809
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 100,
+            "out_tokens": 1500,
+            "prefill_tok_s": 69.56,
+            "decode_tok_s": 18.81,
+            "prefill_ms": 560.7,
+            "ttft_s": 0.614,
+            "cached_tokens": 61,
+            "wall_s": 80.305
+          },
+          "telemetry_before": {
+            "npu_util_pct": 83.86,
+            "npu_mem_used_mb": 1556,
+            "npu_mem_total_mb": 4019,
+            "cpu_total_pct": 27.5
+          },
+          "telemetry_after": {
+            "npu_util_pct": 52.6,
+            "npu_mem_used_mb": 5248,
+            "npu_mem_total_mb": 13866,
+            "cpu_total_pct": 33.7
+          },
+          "during": {
+            "samples": 67,
+            "npu_util_peak": 99.26,
+            "npu_util_median": 58.8,
+            "npu_mem_peak_mb": 10130,
+            "npu_mem_total_mb": 4019
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 17.4,
+            "per_stream_tok_s": 19.72,
+            "wall_s": 9.2,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 18.56,
+            "per_stream_tok_s": 19.64,
+            "wall_s": 17.24,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 18.32,
+            "per_stream_tok_s": 19.75,
+            "wall_s": 34.93,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 18.7,
+            "per_stream_tok_s": 19.65,
+            "wall_s": 68.46,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 98,
+            "out_tokens": 663,
+            "prefill_tok_s": 68.56,
+            "decode_tok_s": 19.32,
+            "prefill_ms": 539.6,
+            "ttft_s": 0.591,
+            "cached_tokens": 61,
+            "wall_s": 35.567
+          },
+          "on": {
+            "prompt_tokens": 98,
+            "out_tokens": 466,
+            "prefill_tok_s": 71.31,
+            "decode_tok_s": 19.44,
+            "prefill_ms": 518.9,
+            "ttft_s": 0.57,
+            "cached_tokens": 61,
+            "wall_s": 25.166
+          }
+        }
+      }
+    },
+    {
+      "model": "deepreinforce-ai/Ornith-1.0-35B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 50,
+      "total_size": 18041197148,
+      "context_window": null,
+      "elapsed_s": 213.9,
+      "npu_mem_total_mb": 4739,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:01:42-0500",
+        "resident": [
+          {
+            "model": "deepreinforce-ai/Ornith-1.0-35B",
+            "npu_usage": 50
+          }
+        ],
+        "npu_units_used": 50,
+        "npu_units_free": 50,
+        "npu_util_pct": 59.26,
+        "npu_mem_used_mb": 1238,
+        "cpu_total_pct": 29.4,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 130.67,
+            "decode_tok_s": 44.11,
+            "prefill_ms": 551.0,
+            "ttft_s": 0.574,
+            "cached_tokens": 0,
+            "wall_s": 0.896
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 385.11,
+            "decode_tok_s": 44.55,
+            "prefill_ms": 862.1,
+            "ttft_s": 0.885,
+            "cached_tokens": 0,
+            "wall_s": 1.17
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 699.54,
+            "decode_tok_s": 39.8,
+            "prefill_ms": 2155.7,
+            "ttft_s": 2.181,
+            "cached_tokens": 72,
+            "wall_s": 2.423
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 740.2,
+            "decode_tok_s": 45.54,
+            "prefill_ms": 6673.9,
+            "ttft_s": 6.696,
+            "cached_tokens": 1320,
+            "wall_s": 7.033
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 90.9,
+            "decode_tok_s": 22.54,
+            "prefill_ms": 495.1,
+            "ttft_s": 0.539,
+            "cached_tokens": 0,
+            "wall_s": 67.336
+          },
+          "telemetry_before": {
+            "npu_util_pct": 74.43,
+            "npu_mem_used_mb": 3684,
+            "npu_mem_total_mb": 11890,
+            "cpu_total_pct": 30.0
+          },
+          "telemetry_after": {
+            "npu_util_pct": 55.56,
+            "npu_mem_used_mb": 6657,
+            "npu_mem_total_mb": 10555,
+            "cpu_total_pct": 34.3
+          },
+          "during": {
+            "samples": 56,
+            "npu_util_peak": 99.66,
+            "npu_util_median": 54.9,
+            "npu_mem_peak_mb": 12289,
+            "npu_mem_total_mb": 11890
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 20.18,
+            "per_stream_tok_s": 22.93,
+            "wall_s": 7.93,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 21.46,
+            "per_stream_tok_s": 22.82,
+            "wall_s": 14.91,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 21.05,
+            "per_stream_tok_s": 22.77,
+            "wall_s": 30.4,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 18.45,
+            "per_stream_tok_s": 22.69,
+            "wall_s": 34.68,
+            "ok": 4,
+            "failed": 4
+          }
+        ],
+        "thinking": {
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 598,
+            "prefill_tok_s": 10.71,
+            "decode_tok_s": 20.63,
+            "prefill_ms": 186.7,
+            "ttft_s": 0.235,
+            "cached_tokens": 41,
+            "wall_s": 29.583
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B-turbo",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 55,
+      "total_size": 17865442756,
+      "context_window": null,
+      "elapsed_s": 179.2,
+      "npu_mem_total_mb": 12775,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:06:09-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.6-35B-A3B-turbo",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 57.63,
+        "npu_mem_used_mb": 9604,
+        "cpu_total_pct": 30.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 115.43,
+            "decode_tok_s": 23.4,
+            "prefill_ms": 623.7,
+            "ttft_s": 0.666,
+            "cached_tokens": 0,
+            "wall_s": 0.833
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 357.64,
+            "decode_tok_s": 24.27,
+            "prefill_ms": 928.3,
+            "ttft_s": 0.97,
+            "cached_tokens": 0,
+            "wall_s": 1.093
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 668.3,
+            "decode_tok_s": 22.06,
+            "prefill_ms": 2256.5,
+            "ttft_s": 2.302,
+            "cached_tokens": 72,
+            "wall_s": 2.423
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 718.29,
+            "decode_tok_s": 23.11,
+            "prefill_ms": 6877.4,
+            "ttft_s": 6.921,
+            "cached_tokens": 1320,
+            "wall_s": 7.066
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 85.42,
+            "decode_tok_s": 32.51,
+            "prefill_ms": 526.8,
+            "ttft_s": 0.558,
+            "cached_tokens": 0,
+            "wall_s": 46.743
+          },
+          "telemetry_before": {
+            "npu_util_pct": 94.16,
+            "npu_mem_used_mb": 1194,
+            "npu_mem_total_mb": 1822,
+            "cpu_total_pct": 30.1
+          },
+          "telemetry_after": {
+            "npu_util_pct": 33.51,
+            "npu_mem_used_mb": 2083,
+            "npu_mem_total_mb": 6025,
+            "cpu_total_pct": 34.1
+          },
+          "during": {
+            "samples": 39,
+            "npu_util_peak": 97.91,
+            "npu_util_median": 47.6,
+            "npu_mem_peak_mb": 11123,
+            "npu_mem_total_mb": 1822
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 22.9,
+            "per_stream_tok_s": 26.38,
+            "wall_s": 6.99,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 25.23,
+            "per_stream_tok_s": 27.23,
+            "wall_s": 12.68,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 26.75,
+            "per_stream_tok_s": 29.48,
+            "wall_s": 23.92,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 25.96,
+            "per_stream_tok_s": 29.2,
+            "wall_s": 49.31,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 595,
+            "prefill_tok_s": 90.98,
+            "decode_tok_s": 50.37,
+            "prefill_ms": 494.6,
+            "ttft_s": 0.514,
+            "cached_tokens": 0,
+            "wall_s": 12.375
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 688,
+            "prefill_tok_s": 84.67,
+            "decode_tok_s": 47.88,
+            "prefill_ms": 507.8,
+            "ttft_s": 0.529,
+            "cached_tokens": 0,
+            "wall_s": 15.413
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 47,
+      "total_size": 17406951670,
+      "context_window": null,
+      "elapsed_s": 226.6,
+      "npu_mem_total_mb": 8017,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:09:58-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.6-35B-A3B",
+            "npu_usage": 47
+          }
+        ],
+        "npu_units_used": 47,
+        "npu_units_free": 53,
+        "npu_util_pct": 87.79,
+        "npu_mem_used_mb": 832,
+        "cpu_total_pct": 28.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 133.57,
+            "decode_tok_s": 57.02,
+            "prefill_ms": 539.0,
+            "ttft_s": 0.557,
+            "cached_tokens": 0,
+            "wall_s": 0.698
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 367.23,
+            "decode_tok_s": 50.24,
+            "prefill_ms": 904.1,
+            "ttft_s": 0.924,
+            "cached_tokens": 0,
+            "wall_s": 1.036
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 663.69,
+            "decode_tok_s": 48.14,
+            "prefill_ms": 2272.1,
+            "ttft_s": 2.293,
+            "cached_tokens": 72,
+            "wall_s": 2.391
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 719.34,
+            "decode_tok_s": 54.68,
+            "prefill_ms": 6867.4,
+            "ttft_s": 6.886,
+            "cached_tokens": 1320,
+            "wall_s": 6.988
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 88.17,
+            "decode_tok_s": 24.87,
+            "prefill_ms": 510.4,
+            "ttft_s": 0.551,
+            "cached_tokens": 0,
+            "wall_s": 60.896
+          },
+          "telemetry_before": {
+            "npu_util_pct": 44.38,
+            "npu_mem_used_mb": 3129,
+            "npu_mem_total_mb": 8672,
+            "cpu_total_pct": 29.9
+          },
+          "telemetry_after": {
+            "npu_util_pct": 59.95,
+            "npu_mem_used_mb": 9365,
+            "npu_mem_total_mb": 13549,
+            "cpu_total_pct": 30.1
+          },
+          "during": {
+            "samples": 51,
+            "npu_util_peak": 92.92,
+            "npu_util_median": 64.9,
+            "npu_mem_peak_mb": 9365,
+            "npu_mem_total_mb": 8672
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 22.04,
+            "per_stream_tok_s": 25.2,
+            "wall_s": 7.26,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 23.63,
+            "per_stream_tok_s": 25.24,
+            "wall_s": 13.54,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 23.32,
+            "per_stream_tok_s": 25.14,
+            "wall_s": 27.45,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 23.25,
+            "per_stream_tok_s": 25.26,
+            "wall_s": 55.05,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 542,
+            "prefill_tok_s": 91.35,
+            "decode_tok_s": 25.03,
+            "prefill_ms": 492.6,
+            "ttft_s": 0.533,
+            "cached_tokens": 0,
+            "wall_s": 22.635
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 8.15,
+            "decode_tok_s": 24.99,
+            "prefill_ms": 245.3,
+            "ttft_s": 0.285,
+            "cached_tokens": 41,
+            "wall_s": 28.31
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.5-35B-A3B",
+      "params": "35B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 45,
+      "total_size": 16892736194,
+      "context_window": null,
+      "elapsed_s": 194.7,
+      "npu_mem_total_mb": 1148,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:14:26-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.5-35B-A3B",
+            "npu_usage": 45
+          }
+        ],
+        "npu_units_used": 45,
+        "npu_units_free": 55,
+        "npu_util_pct": 6.45,
+        "npu_mem_used_mb": 348,
+        "cpu_total_pct": 30.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 127.92,
+            "decode_tok_s": 58.35,
+            "prefill_ms": 562.9,
+            "ttft_s": 0.58,
+            "cached_tokens": 0,
+            "wall_s": 0.716
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 345.68,
+            "decode_tok_s": 59.79,
+            "prefill_ms": 960.4,
+            "ttft_s": 0.977,
+            "cached_tokens": 0,
+            "wall_s": 1.073
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 634.11,
+            "decode_tok_s": 57.54,
+            "prefill_ms": 2390.7,
+            "ttft_s": 2.408,
+            "cached_tokens": 64,
+            "wall_s": 2.507
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 695.26,
+            "decode_tok_s": 55.07,
+            "prefill_ms": 6794.6,
+            "ttft_s": 6.813,
+            "cached_tokens": 1536,
+            "wall_s": 7.014
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 157.68,
+            "decode_tok_s": 28.83,
+            "prefill_ms": 285.4,
+            "ttft_s": 0.32,
+            "cached_tokens": 0,
+            "wall_s": 52.368
+          },
+          "telemetry_before": {
+            "npu_util_pct": 44.69,
+            "npu_mem_used_mb": 2353,
+            "npu_mem_total_mb": 6598,
+            "cpu_total_pct": 28.7
+          },
+          "telemetry_after": {
+            "npu_util_pct": 82.77,
+            "npu_mem_used_mb": 1316,
+            "npu_mem_total_mb": 4715,
+            "cpu_total_pct": 25.9
+          },
+          "during": {
+            "samples": 44,
+            "npu_util_peak": 90.29,
+            "npu_util_median": 53.2,
+            "npu_mem_peak_mb": 8963,
+            "npu_mem_total_mb": 6598
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 27.04,
+            "per_stream_tok_s": 29.37,
+            "wall_s": 5.92,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 27.79,
+            "per_stream_tok_s": 29.38,
+            "wall_s": 11.51,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 27.9,
+            "per_stream_tok_s": 29.38,
+            "wall_s": 22.94,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 27.91,
+            "per_stream_tok_s": 29.41,
+            "wall_s": 45.86,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 573,
+            "prefill_tok_s": 167.74,
+            "decode_tok_s": 29.18,
+            "prefill_ms": 268.3,
+            "ttft_s": 0.303,
+            "cached_tokens": 0,
+            "wall_s": 20.173
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 165.73,
+            "decode_tok_s": 29.21,
+            "prefill_ms": 259.5,
+            "ttft_s": 0.294,
+            "cached_tokens": 0,
+            "wall_s": 24.343
+          }
+        }
+      }
+    },
+    {
+      "model": "zai-org/GLM-4.7-Flash",
+      "params": "31B",
+      "type": "Text Generation",
+      "npu_usage": 57,
+      "total_size": 15804403021,
+      "context_window": null,
+      "elapsed_s": 348.6,
+      "npu_mem_total_mb": 8383,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:18:27-0500",
+        "resident": [
+          {
+            "model": "zai-org/GLM-4.7-Flash",
+            "npu_usage": 57
+          }
+        ],
+        "npu_units_used": 57,
+        "npu_units_free": 43,
+        "npu_util_pct": 72.39,
+        "npu_mem_used_mb": 1622,
+        "cpu_total_pct": 23.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 65,
+            "out_tokens": 2,
+            "prefill_tok_s": 83.23,
+            "decode_tok_s": 31.49,
+            "prefill_ms": 780.9,
+            "ttft_s": 0.813,
+            "cached_tokens": 0,
+            "wall_s": 0.947
+          },
+          {
+            "prompt_tokens": 325,
+            "out_tokens": 2,
+            "prefill_tok_s": 179.09,
+            "decode_tok_s": 31.09,
+            "prefill_ms": 1507.6,
+            "ttft_s": 1.54,
+            "cached_tokens": 55,
+            "wall_s": 1.619
+          },
+          {
+            "prompt_tokens": 1573,
+            "out_tokens": 2,
+            "prefill_tok_s": 309.49,
+            "decode_tok_s": 28.14,
+            "prefill_ms": 4064.7,
+            "ttft_s": 4.1,
+            "cached_tokens": 315,
+            "wall_s": 4.206
+          },
+          {
+            "prompt_tokens": 6253,
+            "out_tokens": 2,
+            "prefill_tok_s": 285.7,
+            "decode_tok_s": 21.58,
+            "prefill_ms": 16415.8,
+            "ttft_s": 16.462,
+            "cached_tokens": 1563,
+            "wall_s": 16.612
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 38,
+            "out_tokens": 1500,
+            "prefill_tok_s": 47.47,
+            "decode_tok_s": 14.92,
+            "prefill_ms": 737.3,
+            "ttft_s": 0.804,
+            "cached_tokens": 3,
+            "wall_s": 101.286
+          },
+          "telemetry_before": {
+            "npu_util_pct": 0.61,
+            "npu_mem_used_mb": 1165,
+            "npu_mem_total_mb": 9197,
+            "cpu_total_pct": 22.6
+          },
+          "telemetry_after": {
+            "npu_util_pct": 46.37,
+            "npu_mem_used_mb": 7785,
+            "npu_mem_total_mb": 12318,
+            "cpu_total_pct": 33.9
+          },
+          "during": {
+            "samples": 85,
+            "npu_util_peak": 95.52,
+            "npu_util_median": 44.2,
+            "npu_mem_peak_mb": 10557,
+            "npu_mem_total_mb": 9197
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 13.58,
+            "per_stream_tok_s": 15.75,
+            "wall_s": 11.78,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 15.14,
+            "per_stream_tok_s": 15.79,
+            "wall_s": 21.14,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 14.47,
+            "per_stream_tok_s": 15.77,
+            "wall_s": 44.24,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 14.83,
+            "per_stream_tok_s": 15.78,
+            "wall_s": 86.3,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 36,
+            "out_tokens": 206,
+            "prefill_tok_s": 45.54,
+            "decode_tok_s": 15.74,
+            "prefill_ms": 724.6,
+            "ttft_s": 0.788,
+            "cached_tokens": 3,
+            "wall_s": 14.801
+          },
+          "on": {
+            "prompt_tokens": 36,
+            "out_tokens": 700,
+            "prefill_tok_s": 15.07,
+            "decode_tok_s": 15.51,
+            "prefill_ms": 66.4,
+            "ttft_s": 0.131,
+            "cached_tokens": 35,
+            "wall_s": 45.251
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B",
+      "params": "27B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 55,
+      "total_size": 15701814459,
+      "context_window": null,
+      "elapsed_s": 453.4,
+      "npu_mem_total_mb": 8479,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:24:57-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.8-27B",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 32.85,
+        "npu_mem_used_mb": 1421,
+        "cpu_total_pct": 31.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 61.17,
+            "decode_tok_s": 10.23,
+            "prefill_ms": 1177.0,
+            "ttft_s": 1.275,
+            "cached_tokens": 0,
+            "wall_s": 1.467
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 174.43,
+            "decode_tok_s": 10.27,
+            "prefill_ms": 1903.3,
+            "ttft_s": 2.001,
+            "cached_tokens": 0,
+            "wall_s": 2.136
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 390.62,
+            "decode_tok_s": 10.17,
+            "prefill_ms": 3860.6,
+            "ttft_s": 3.959,
+            "cached_tokens": 72,
+            "wall_s": 4.115
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 453.19,
+            "decode_tok_s": 9.91,
+            "prefill_ms": 10900.5,
+            "ttft_s": 11.001,
+            "cached_tokens": 1320,
+            "wall_s": 11.212
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 36.74,
+            "decode_tok_s": 11.44,
+            "prefill_ms": 1224.7,
+            "ttft_s": 1.312,
+            "cached_tokens": 0,
+            "wall_s": 132.457
+          },
+          "telemetry_before": {
+            "npu_util_pct": 93.89,
+            "npu_mem_used_mb": 1143,
+            "npu_mem_total_mb": 2497,
+            "cpu_total_pct": 30.8
+          },
+          "telemetry_after": {
+            "npu_util_pct": 42.53,
+            "npu_mem_used_mb": 2331,
+            "npu_mem_total_mb": 9674,
+            "cpu_total_pct": 33.6
+          },
+          "during": {
+            "samples": 111,
+            "npu_util_peak": 99.76,
+            "npu_util_median": 49.6,
+            "npu_mem_peak_mb": 9712,
+            "npu_mem_total_mb": 2497
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 8.44,
+            "per_stream_tok_s": 10.41,
+            "wall_s": 18.97,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 9.26,
+            "per_stream_tok_s": 9.91,
+            "wall_s": 34.54,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 9.48,
+            "per_stream_tok_s": 10.54,
+            "wall_s": 67.48,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 9.97,
+            "per_stream_tok_s": 11.07,
+            "wall_s": 128.4,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 623,
+            "prefill_tok_s": 37.01,
+            "decode_tok_s": 20.24,
+            "prefill_ms": 1216.0,
+            "ttft_s": 1.265,
+            "cached_tokens": 0,
+            "wall_s": 34.467
+          },
+          "on": {
+            "prompt_tokens": 73,
+            "out_tokens": 264,
+            "prefill_tok_s": 39.18,
+            "decode_tok_s": 18.19,
+            "prefill_ms": 1863.4,
+            "ttft_s": 1.918,
+            "cached_tokens": 0,
+            "wall_s": 17.758
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-27B-Turbo",
+      "params": "27B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 55,
+      "total_size": 15653302333,
+      "context_window": null,
+      "elapsed_s": 428.5,
+      "npu_mem_total_mb": 2440,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:34:44-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.6-27B-Turbo",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 8.36,
+        "npu_mem_used_mb": 574,
+        "cpu_total_pct": 25.7,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 61.79,
+            "decode_tok_s": 9.94,
+            "prefill_ms": 1165.2,
+            "ttft_s": 1.266,
+            "cached_tokens": 0,
+            "wall_s": 1.492
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 190.28,
+            "decode_tok_s": 10.07,
+            "prefill_ms": 1744.8,
+            "ttft_s": 1.844,
+            "cached_tokens": 0,
+            "wall_s": 2.04
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 409.31,
+            "decode_tok_s": 9.85,
+            "prefill_ms": 3684.3,
+            "ttft_s": 3.786,
+            "cached_tokens": 72,
+            "wall_s": 3.955
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 480.37,
+            "decode_tok_s": 9.71,
+            "prefill_ms": 13031.8,
+            "ttft_s": 13.135,
+            "cached_tokens": 0,
+            "wall_s": 14.826
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 38.4,
+            "decode_tok_s": 13.45,
+            "prefill_ms": 1172.0,
+            "ttft_s": 1.246,
+            "cached_tokens": 0,
+            "wall_s": 112.739
+          },
+          "telemetry_before": {
+            "npu_util_pct": 77.68,
+            "npu_mem_used_mb": 2281,
+            "npu_mem_total_mb": 5897,
+            "cpu_total_pct": 27.2
+          },
+          "telemetry_after": {
+            "npu_util_pct": 21.3,
+            "npu_mem_used_mb": 2631,
+            "npu_mem_total_mb": 4258,
+            "cpu_total_pct": 27.5
+          },
+          "during": {
+            "samples": 94,
+            "npu_util_peak": 98.6,
+            "npu_util_median": 53.8,
+            "npu_mem_peak_mb": 11345,
+            "npu_mem_total_mb": 5897
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 9.98,
+            "per_stream_tok_s": 12.52,
+            "wall_s": 16.03,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 11.07,
+            "per_stream_tok_s": 11.91,
+            "wall_s": 28.9,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 10.91,
+            "per_stream_tok_s": 11.91,
+            "wall_s": 58.64,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 10.58,
+            "per_stream_tok_s": 11.77,
+            "wall_s": 120.95,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 652,
+            "prefill_tok_s": 39.2,
+            "decode_tok_s": 21.72,
+            "prefill_ms": 1148.0,
+            "ttft_s": 1.194,
+            "cached_tokens": 0,
+            "wall_s": 33.849
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 36.79,
+            "decode_tok_s": 21.93,
+            "prefill_ms": 1168.7,
+            "ttft_s": 1.214,
+            "cached_tokens": 0,
+            "wall_s": 34.668
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.6-27B",
+      "params": "27B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 48,
+      "total_size": 15595751337,
+      "context_window": null,
+      "elapsed_s": 863.0,
+      "npu_mem_total_mb": 4468,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:42:46-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.6-27B",
+            "npu_usage": 48
+          }
+        ],
+        "npu_units_used": 48,
+        "npu_units_free": 52,
+        "npu_util_pct": 35.95,
+        "npu_mem_used_mb": 730,
+        "cpu_total_pct": 30.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 62.03,
+            "decode_tok_s": 12.89,
+            "prefill_ms": 1160.8,
+            "ttft_s": 1.238,
+            "cached_tokens": 0,
+            "wall_s": 1.426
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 187.87,
+            "decode_tok_s": 12.81,
+            "prefill_ms": 1767.2,
+            "ttft_s": 1.845,
+            "cached_tokens": 0,
+            "wall_s": 2.025
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 413.36,
+            "decode_tok_s": 12.76,
+            "prefill_ms": 3648.2,
+            "ttft_s": 3.727,
+            "cached_tokens": 72,
+            "wall_s": 3.945
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 486.25,
+            "decode_tok_s": 12.58,
+            "prefill_ms": 12874.1,
+            "ttft_s": 12.954,
+            "cached_tokens": 0,
+            "wall_s": 14.474
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 40.11,
+            "decode_tok_s": 6.39,
+            "prefill_ms": 1121.9,
+            "ttft_s": 1.278,
+            "cached_tokens": 0,
+            "wall_s": 235.926
+          },
+          "telemetry_before": {
+            "npu_util_pct": 7.74,
+            "npu_mem_used_mb": 2552,
+            "npu_mem_total_mb": 5012,
+            "cpu_total_pct": 30.9
+          },
+          "telemetry_after": {
+            "npu_util_pct": 6.2,
+            "npu_mem_used_mb": 666,
+            "npu_mem_total_mb": 1577,
+            "cpu_total_pct": 34.2
+          },
+          "during": {
+            "samples": 198,
+            "npu_util_peak": 98.89,
+            "npu_util_median": 47.6,
+            "npu_mem_peak_mb": 12362,
+            "npu_mem_total_mb": 5012
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 5.31,
+            "per_stream_tok_s": 6.47,
+            "wall_s": 30.15,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 6.17,
+            "per_stream_tok_s": 6.47,
+            "wall_s": 51.85,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 6.11,
+            "per_stream_tok_s": 6.47,
+            "wall_s": 104.81,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 6.11,
+            "per_stream_tok_s": 6.47,
+            "wall_s": 209.33,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 660,
+            "prefill_tok_s": 40.81,
+            "decode_tok_s": 6.43,
+            "prefill_ms": 1102.7,
+            "ttft_s": 1.258,
+            "cached_tokens": 0,
+            "wall_s": 107.161
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 630,
+            "prefill_tok_s": 39.19,
+            "decode_tok_s": 6.43,
+            "prefill_ms": 1097.3,
+            "ttft_s": 1.253,
+            "cached_tokens": 0,
+            "wall_s": 101.534
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct-Turbo",
+      "params": "31B",
+      "type": "Text Generation",
+      "npu_usage": 55,
+      "total_size": 15172762132,
+      "context_window": null,
+      "elapsed_s": 166.6,
+      "npu_mem_total_mb": 5061,
+      "conditions_at_start": {
+        "at": "2026-09-19T13:57:51-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct-Turbo",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 7.53,
+        "npu_mem_used_mb": 1324,
+        "cpu_total_pct": 31.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 304.6,
+            "decode_tok_s": 23.67,
+            "prefill_ms": 223.2,
+            "ttft_s": 0.266,
+            "cached_tokens": 0,
+            "wall_s": 0.443
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 735.79,
+            "decode_tok_s": 22.94,
+            "prefill_ms": 445.8,
+            "ttft_s": 0.489,
+            "cached_tokens": 0,
+            "wall_s": 0.614
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 1037.56,
+            "decode_tok_s": 20.29,
+            "prefill_ms": 1272.2,
+            "ttft_s": 1.321,
+            "cached_tokens": 256,
+            "wall_s": 1.457
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 959.92,
+            "decode_tok_s": 20.66,
+            "prefill_ms": 4917.1,
+            "ttft_s": 4.965,
+            "cached_tokens": 1536,
+            "wall_s": 5.135
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 213.47,
+            "decode_tok_s": 29.4,
+            "prefill_ms": 192.1,
+            "ttft_s": 0.226,
+            "cached_tokens": 0,
+            "wall_s": 51.304
+          },
+          "telemetry_before": {
+            "npu_util_pct": 11.21,
+            "npu_mem_used_mb": 3040,
+            "npu_mem_total_mb": 8700,
+            "cpu_total_pct": 31.5
+          },
+          "telemetry_after": {
+            "npu_util_pct": 68.51,
+            "npu_mem_used_mb": 7093,
+            "npu_mem_total_mb": 14523,
+            "cpu_total_pct": 31.6
+          },
+          "during": {
+            "samples": 43,
+            "npu_util_peak": 98.31,
+            "npu_util_median": 53.0,
+            "npu_mem_peak_mb": 11251,
+            "npu_mem_total_mb": 8700
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 25.37,
+            "per_stream_tok_s": 26.47,
+            "wall_s": 6.31,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 24.22,
+            "per_stream_tok_s": 25.09,
+            "wall_s": 13.21,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 24.96,
+            "per_stream_tok_s": 25.35,
+            "wall_s": 25.65,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 25.43,
+            "per_stream_tok_s": 25.59,
+            "wall_s": 50.33,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 267,
+            "prefill_tok_s": 224.1,
+            "decode_tok_s": 51.33,
+            "prefill_ms": 183.0,
+            "ttft_s": 0.202,
+            "cached_tokens": 0,
+            "wall_s": 5.507
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 315,
+            "prefill_tok_s": 228.74,
+            "decode_tok_s": 52.31,
+            "prefill_ms": 179.2,
+            "ttft_s": 0.198,
+            "cached_tokens": 0,
+            "wall_s": 6.298
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+      "params": "30B",
+      "type": "Text Generation",
+      "npu_usage": 55,
+      "total_size": 14734108152,
+      "context_window": null,
+      "elapsed_s": 193.7,
+      "npu_mem_total_mb": 3256,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:01:27-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-30B-A3B-Instruct-2507",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 11.39,
+        "npu_mem_used_mb": 1709,
+        "cpu_total_pct": 27.9,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 209.34,
+            "decode_tok_s": 51.44,
+            "prefill_ms": 324.8,
+            "ttft_s": 0.344,
+            "cached_tokens": 0,
+            "wall_s": 0.453
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 547.54,
+            "decode_tok_s": 51.43,
+            "prefill_ms": 599.0,
+            "ttft_s": 0.618,
+            "cached_tokens": 0,
+            "wall_s": 0.679
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 844.13,
+            "decode_tok_s": 47.21,
+            "prefill_ms": 1563.7,
+            "ttft_s": 1.585,
+            "cached_tokens": 256,
+            "wall_s": 1.665
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 799.46,
+            "decode_tok_s": 40.25,
+            "prefill_ms": 5904.0,
+            "ttft_s": 5.929,
+            "cached_tokens": 1536,
+            "wall_s": 6.032
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 131.83,
+            "decode_tok_s": 24.87,
+            "prefill_ms": 311.0,
+            "ttft_s": 0.351,
+            "cached_tokens": 0,
+            "wall_s": 60.662
+          },
+          "telemetry_before": {
+            "npu_util_pct": 91.88,
+            "npu_mem_used_mb": 5479,
+            "npu_mem_total_mb": 13089,
+            "cpu_total_pct": 28.6
+          },
+          "telemetry_after": {
+            "npu_util_pct": 31.01,
+            "npu_mem_used_mb": 3544,
+            "npu_mem_total_mb": 12199,
+            "cpu_total_pct": 15.8
+          },
+          "during": {
+            "samples": 51,
+            "npu_util_peak": 91.88,
+            "npu_util_median": 42.3,
+            "npu_mem_peak_mb": 8523,
+            "npu_mem_total_mb": 13089
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 23.71,
+            "per_stream_tok_s": 25.94,
+            "wall_s": 6.75,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 24.71,
+            "per_stream_tok_s": 26.02,
+            "wall_s": 12.95,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 24.48,
+            "per_stream_tok_s": 26.03,
+            "wall_s": 26.15,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 24.8,
+            "per_stream_tok_s": 26.04,
+            "wall_s": 51.61,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 344,
+            "prefill_tok_s": 136.51,
+            "decode_tok_s": 25.86,
+            "prefill_ms": 300.3,
+            "ttft_s": 0.339,
+            "cached_tokens": 0,
+            "wall_s": 13.98
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 311,
+            "prefill_tok_s": 138.1,
+            "decode_tok_s": 25.85,
+            "prefill_ms": 296.9,
+            "ttft_s": 0.336,
+            "cached_tokens": 0,
+            "wall_s": 12.381
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Instruct",
+      "params": "30B",
+      "type": "Text Generation",
+      "npu_usage": 55,
+      "total_size": 14731157237,
+      "context_window": null,
+      "elapsed_s": 165.1,
+      "npu_mem_total_mb": 6087,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:05:18-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-30B-A3B-Instruct",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 36.06,
+        "npu_mem_used_mb": 2581,
+        "cpu_total_pct": 15.3,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 311.29,
+            "decode_tok_s": 59.17,
+            "prefill_ms": 218.4,
+            "ttft_s": 0.235,
+            "cached_tokens": 0,
+            "wall_s": 0.337
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 691.03,
+            "decode_tok_s": 61.43,
+            "prefill_ms": 395.1,
+            "ttft_s": 0.411,
+            "cached_tokens": 55,
+            "wall_s": 0.483
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 1151.43,
+            "decode_tok_s": 55.1,
+            "prefill_ms": 1095.2,
+            "ttft_s": 1.113,
+            "cached_tokens": 315,
+            "wall_s": 1.173
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 977.52,
+            "decode_tok_s": 48.15,
+            "prefill_ms": 4800.9,
+            "ttft_s": 4.822,
+            "cached_tokens": 1563,
+            "wall_s": 4.91
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 217.37,
+            "decode_tok_s": 29.26,
+            "prefill_ms": 174.8,
+            "ttft_s": 0.209,
+            "cached_tokens": 3,
+            "wall_s": 51.504
+          },
+          "telemetry_before": {
+            "npu_util_pct": 47.67,
+            "npu_mem_used_mb": 6195,
+            "npu_mem_total_mb": 10595,
+            "cpu_total_pct": 15.8
+          },
+          "telemetry_after": {
+            "npu_util_pct": 54.99,
+            "npu_mem_used_mb": 514,
+            "npu_mem_total_mb": 1156,
+            "cpu_total_pct": 33.8
+          },
+          "during": {
+            "samples": 43,
+            "npu_util_peak": 96.11,
+            "npu_util_median": 55.0,
+            "npu_mem_peak_mb": 10659,
+            "npu_mem_total_mb": 10595
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 29.26,
+            "per_stream_tok_s": 30.77,
+            "wall_s": 5.47,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 30.11,
+            "per_stream_tok_s": 30.87,
+            "wall_s": 10.63,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 30.01,
+            "per_stream_tok_s": 30.86,
+            "wall_s": 21.32,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 29.88,
+            "per_stream_tok_s": 30.91,
+            "wall_s": 42.84,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 397,
+            "prefill_tok_s": 222.11,
+            "decode_tok_s": 30.54,
+            "prefill_ms": 171.1,
+            "ttft_s": 0.204,
+            "cached_tokens": 3,
+            "wall_s": 13.257
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 388,
+            "prefill_tok_s": 27.94,
+            "decode_tok_s": 30.5,
+            "prefill_ms": 35.8,
+            "ttft_s": 0.069,
+            "cached_tokens": 40,
+            "wall_s": 12.794
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "params": "30B",
+      "type": "Text Generation",
+      "npu_usage": 55,
+      "total_size": 14609951030,
+      "context_window": null,
+      "elapsed_s": 159.8,
+      "npu_mem_total_mb": 4850,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:08:40-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+            "npu_usage": 55
+          }
+        ],
+        "npu_units_used": 55,
+        "npu_units_free": 45,
+        "npu_util_pct": 64.15,
+        "npu_mem_used_mb": 2341,
+        "cpu_total_pct": 22.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 327.05,
+            "decode_tok_s": 62.29,
+            "prefill_ms": 207.9,
+            "ttft_s": 0.224,
+            "cached_tokens": 0,
+            "wall_s": 0.347
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 712.62,
+            "decode_tok_s": 61.67,
+            "prefill_ms": 383.1,
+            "ttft_s": 0.399,
+            "cached_tokens": 55,
+            "wall_s": 0.483
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 1150.2,
+            "decode_tok_s": 54.57,
+            "prefill_ms": 1096.3,
+            "ttft_s": 1.115,
+            "cached_tokens": 315,
+            "wall_s": 1.226
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 940.85,
+            "decode_tok_s": 48.3,
+            "prefill_ms": 4988.1,
+            "ttft_s": 5.009,
+            "cached_tokens": 1563,
+            "wall_s": 5.153
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 228.57,
+            "decode_tok_s": 29.22,
+            "prefill_ms": 166.2,
+            "ttft_s": 0.2,
+            "cached_tokens": 3,
+            "wall_s": 51.609
+          },
+          "telemetry_before": {
+            "npu_util_pct": 61.49,
+            "npu_mem_used_mb": 4823,
+            "npu_mem_total_mb": 15030,
+            "cpu_total_pct": 28.6
+          },
+          "telemetry_after": {
+            "npu_util_pct": 10.77,
+            "npu_mem_used_mb": 5917,
+            "npu_mem_total_mb": 16082,
+            "cpu_total_pct": 34.2
+          },
+          "during": {
+            "samples": 43,
+            "npu_util_peak": 99.39,
+            "npu_util_median": 64.4,
+            "npu_mem_peak_mb": 8625,
+            "npu_mem_total_mb": 15030
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 29.7,
+            "per_stream_tok_s": 31.01,
+            "wall_s": 5.39,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 29.63,
+            "per_stream_tok_s": 30.76,
+            "wall_s": 10.8,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 29.85,
+            "per_stream_tok_s": 30.88,
+            "wall_s": 21.44,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 29.97,
+            "per_stream_tok_s": 30.86,
+            "wall_s": 42.71,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 308,
+            "prefill_tok_s": 231.38,
+            "decode_tok_s": 30.69,
+            "prefill_ms": 164.2,
+            "ttft_s": 0.197,
+            "cached_tokens": 3,
+            "wall_s": 10.296
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 300,
+            "prefill_tok_s": 29.03,
+            "decode_tok_s": 30.68,
+            "prefill_ms": 34.4,
+            "ttft_s": 0.067,
+            "cached_tokens": 40,
+            "wall_s": 9.928
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-30B-A3B-Thinking",
+      "params": "30B",
+      "type": "Text Generation",
+      "npu_usage": 58,
+      "total_size": 14545679165,
+      "context_window": null,
+      "elapsed_s": 186.7,
+      "npu_mem_total_mb": 9971,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:11:57-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-30B-A3B-Thinking",
+            "npu_usage": 58
+          }
+        ],
+        "npu_units_used": 58,
+        "npu_units_free": 42,
+        "npu_util_pct": 52.42,
+        "npu_mem_used_mb": 6602,
+        "cpu_total_pct": 29.5,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 70,
+            "out_tokens": 4,
+            "prefill_tok_s": 323.78,
+            "decode_tok_s": 41.16,
+            "prefill_ms": 216.2,
+            "ttft_s": 0.24,
+            "cached_tokens": 0,
+            "wall_s": 0.511
+          },
+          {
+            "prompt_tokens": 330,
+            "out_tokens": 4,
+            "prefill_tok_s": 695.22,
+            "decode_tok_s": 40.71,
+            "prefill_ms": 395.6,
+            "ttft_s": 0.42,
+            "cached_tokens": 55,
+            "wall_s": 0.566
+          },
+          {
+            "prompt_tokens": 1578,
+            "out_tokens": 4,
+            "prefill_tok_s": 1139.38,
+            "decode_tok_s": 35.8,
+            "prefill_ms": 1108.5,
+            "ttft_s": 1.136,
+            "cached_tokens": 315,
+            "wall_s": 1.275
+          },
+          {
+            "prompt_tokens": 6258,
+            "out_tokens": 4,
+            "prefill_tok_s": 968.0,
+            "decode_tok_s": 30.87,
+            "prefill_ms": 4850.2,
+            "ttft_s": 4.883,
+            "cached_tokens": 1563,
+            "wall_s": 5.193
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 43,
+            "out_tokens": 1500,
+            "prefill_tok_s": 211.16,
+            "decode_tok_s": 29.24,
+            "prefill_ms": 189.4,
+            "ttft_s": 0.224,
+            "cached_tokens": 3,
+            "wall_s": 51.536
+          },
+          "telemetry_before": {
+            "npu_util_pct": 67.18,
+            "npu_mem_used_mb": 12098,
+            "npu_mem_total_mb": 15274,
+            "cpu_total_pct": 29.3
+          },
+          "telemetry_after": {
+            "npu_util_pct": 89.52,
+            "npu_mem_used_mb": 1092,
+            "npu_mem_total_mb": 7266,
+            "cpu_total_pct": 29.9
+          },
+          "during": {
+            "samples": 43,
+            "npu_util_peak": 95.98,
+            "npu_util_median": 50.4,
+            "npu_mem_peak_mb": 12098,
+            "npu_mem_total_mb": 15274
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 28.58,
+            "per_stream_tok_s": 30.96,
+            "wall_s": 5.6,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 30.04,
+            "per_stream_tok_s": 30.82,
+            "wall_s": 10.65,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 29.87,
+            "per_stream_tok_s": 30.96,
+            "wall_s": 21.43,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 29.89,
+            "per_stream_tok_s": 30.91,
+            "wall_s": 42.83,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 231.59,
+            "decode_tok_s": 30.41,
+            "prefill_ms": 172.7,
+            "ttft_s": 0.206,
+            "cached_tokens": 3,
+            "wall_s": 23.534
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 24.62,
+            "decode_tok_s": 30.3,
+            "prefill_ms": 40.6,
+            "ttft_s": 0.074,
+            "cached_tokens": 42,
+            "wall_s": 23.215
+          }
+        }
+      }
+    },
+    {
+      "model": "google/gemma-4-26B-A4B-it",
+      "params": "26B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 78,
+      "total_size": 13422685249,
+      "context_window": null,
+      "elapsed_s": 224.8,
+      "npu_mem_total_mb": 10495,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:15:48-0500",
+        "resident": [
+          {
+            "model": "google/gemma-4-26B-A4B-it",
+            "npu_usage": 78
+          }
+        ],
+        "npu_units_used": 78,
+        "npu_units_free": 22,
+        "npu_util_pct": 19.99,
+        "npu_mem_used_mb": 4348,
+        "cpu_total_pct": 28.7,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 74,
+            "out_tokens": 2,
+            "prefill_tok_s": 325.95,
+            "decode_tok_s": 45.38,
+            "prefill_ms": 227.0,
+            "ttft_s": 0.249,
+            "cached_tokens": 0,
+            "wall_s": 0.393
+          },
+          {
+            "prompt_tokens": 334,
+            "out_tokens": 2,
+            "prefill_tok_s": 679.86,
+            "decode_tok_s": 41.17,
+            "prefill_ms": 408.9,
+            "ttft_s": 0.433,
+            "cached_tokens": 56,
+            "wall_s": 0.489
+          },
+          {
+            "prompt_tokens": 1582,
+            "out_tokens": 2,
+            "prefill_tok_s": 1186.57,
+            "decode_tok_s": 43.11,
+            "prefill_ms": 1066.9,
+            "ttft_s": 1.09,
+            "cached_tokens": 316,
+            "wall_s": 1.155
+          },
+          {
+            "prompt_tokens": 6262,
+            "out_tokens": 2,
+            "prefill_tok_s": 1253.81,
+            "decode_tok_s": 41.5,
+            "prefill_ms": 3747.0,
+            "ttft_s": 3.771,
+            "cached_tokens": 1564,
+            "wall_s": 3.866
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 46,
+            "out_tokens": 1325,
+            "prefill_tok_s": 203.5,
+            "decode_tok_s": 21.7,
+            "prefill_ms": 206.4,
+            "ttft_s": 0.252,
+            "cached_tokens": 4,
+            "wall_s": 61.319
+          },
+          "telemetry_before": {
+            "npu_util_pct": 51.0,
+            "npu_mem_used_mb": 3538,
+            "npu_mem_total_mb": 11821,
+            "cpu_total_pct": 28.8
+          },
+          "telemetry_after": {
+            "npu_util_pct": 48.92,
+            "npu_mem_used_mb": 4469,
+            "npu_mem_total_mb": 8426,
+            "cpu_total_pct": 34.4
+          },
+          "during": {
+            "samples": 51,
+            "npu_util_peak": 95.99,
+            "npu_util_median": 47.9,
+            "npu_mem_peak_mb": 12234,
+            "npu_mem_total_mb": 11821
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 21.9,
+            "per_stream_tok_s": 22.64,
+            "wall_s": 7.31,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 21.92,
+            "per_stream_tok_s": 22.69,
+            "wall_s": 14.6,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 21.98,
+            "per_stream_tok_s": 22.67,
+            "wall_s": 29.11,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 22.01,
+            "per_stream_tok_s": 22.69,
+            "wall_s": 58.16,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 46,
+            "out_tokens": 343,
+            "prefill_tok_s": 201.02,
+            "decode_tok_s": 22.48,
+            "prefill_ms": 208.9,
+            "ttft_s": 0.253,
+            "cached_tokens": 4,
+            "wall_s": 15.739
+          },
+          "on": {
+            "prompt_tokens": 49,
+            "out_tokens": 700,
+            "prefill_tok_s": 225.68,
+            "decode_tok_s": 22.12,
+            "prefill_ms": 208.3,
+            "ttft_s": 0.253,
+            "cached_tokens": 2,
+            "wall_s": 32.116
+          }
+        }
+      }
+    },
+    {
+      "model": "baidu/ERNIE-Image-Turbo",
+      "params": "8B",
+      "type": "Text-to-Image",
+      "npu_usage": 27,
+      "total_size": 11455556128,
+      "context_window": null,
+      "elapsed_s": 38.5,
+      "npu_mem_total_mb": 12843,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:20:10-0500",
+        "resident": [
+          {
+            "model": "baidu/ERNIE-Image-Turbo",
+            "npu_usage": 27
+          }
+        ],
+        "npu_units_used": 27,
+        "npu_units_free": 73,
+        "npu_util_pct": 45.09,
+        "npu_mem_used_mb": 6095,
+        "cpu_total_pct": 29.9,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 12.83,
+              "bytes": 621479,
+              "seed": 1000
+            },
+            {
+              "wall_s": 12.83,
+              "bytes": 603368,
+              "seed": 1001
+            },
+            {
+              "wall_s": 12.83,
+              "bytes": 672255,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 12.83
+        }
+      }
+    },
+    {
+      "model": "openai/gpt-oss-20b",
+      "params": "20B",
+      "type": "Text Generation",
+      "npu_usage": 32,
+      "total_size": 10336685109,
+      "context_window": null,
+      "elapsed_s": 172.4,
+      "npu_mem_total_mb": 1511,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:21:25-0500",
+        "resident": [
+          {
+            "model": "openai/gpt-oss-20b",
+            "npu_usage": 32
+          }
+        ],
+        "npu_units_used": 32,
+        "npu_units_free": 68,
+        "npu_util_pct": 11.09,
+        "npu_mem_used_mb": 617,
+        "cpu_total_pct": 23.5,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 66,
+            "out_tokens": 4,
+            "prefill_tok_s": 272.27,
+            "decode_tok_s": 39.4,
+            "prefill_ms": 242.4,
+            "ttft_s": 0.268,
+            "cached_tokens": 0,
+            "wall_s": 0.476
+          },
+          {
+            "prompt_tokens": 326,
+            "out_tokens": 4,
+            "prefill_tok_s": 683.84,
+            "decode_tok_s": 40.44,
+            "prefill_ms": 396.3,
+            "ttft_s": 0.421,
+            "cached_tokens": 55,
+            "wall_s": 0.54
+          },
+          {
+            "prompt_tokens": 1574,
+            "out_tokens": 4,
+            "prefill_tok_s": 1190.73,
+            "decode_tok_s": 40.18,
+            "prefill_ms": 1057.3,
+            "ttft_s": 1.082,
+            "cached_tokens": 315,
+            "wall_s": 1.278
+          },
+          {
+            "prompt_tokens": 6254,
+            "out_tokens": 4,
+            "prefill_tok_s": 1068.25,
+            "decode_tok_s": 34.68,
+            "prefill_ms": 4391.3,
+            "ttft_s": 4.42,
+            "cached_tokens": 1563,
+            "wall_s": 4.633
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 39,
+            "out_tokens": 1500,
+            "prefill_tok_s": 181.06,
+            "decode_tok_s": 30.91,
+            "prefill_ms": 198.8,
+            "ttft_s": 0.231,
+            "cached_tokens": 3,
+            "wall_s": 48.772
+          },
+          "telemetry_before": {
+            "npu_util_pct": 23.75,
+            "npu_mem_used_mb": 3258,
+            "npu_mem_total_mb": 10547,
+            "cpu_total_pct": 23.9
+          },
+          "telemetry_after": {
+            "npu_util_pct": 9.13,
+            "npu_mem_used_mb": 1777,
+            "npu_mem_total_mb": 2597,
+            "cpu_total_pct": 33.5
+          },
+          "during": {
+            "samples": 41,
+            "npu_util_peak": 99.86,
+            "npu_util_median": 46.8,
+            "npu_mem_peak_mb": 12037,
+            "npu_mem_total_mb": 10547
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 28.97,
+            "per_stream_tok_s": 31.84,
+            "wall_s": 5.52,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 30.54,
+            "per_stream_tok_s": 31.96,
+            "wall_s": 10.48,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 31.02,
+            "per_stream_tok_s": 32.05,
+            "wall_s": 20.63,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 30.69,
+            "per_stream_tok_s": 32.09,
+            "wall_s": 41.71,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 37,
+            "out_tokens": 627,
+            "prefill_tok_s": 173.25,
+            "decode_tok_s": 31.68,
+            "prefill_ms": 196.2,
+            "ttft_s": 0.228,
+            "cached_tokens": 3,
+            "wall_s": 20.047
+          },
+          "on": {
+            "prompt_tokens": 37,
+            "out_tokens": 548,
+            "prefill_tok_s": 174.57,
+            "decode_tok_s": 31.6,
+            "prefill_ms": 194.8,
+            "ttft_s": 0.226,
+            "cached_tokens": 3,
+            "wall_s": 17.915
+          }
+        }
+      }
+    },
+    {
+      "model": "TaoBaiBai2025/Z-Image-Turbo-Creating-Realistic",
+      "params": "10B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 10302326177,
+      "context_window": null,
+      "elapsed_s": 26.5,
+      "npu_mem_total_mb": 5306,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:24:59-0500",
+        "resident": [
+          {
+            "model": "TaoBaiBai2025/Z-Image-Turbo-Creating-Realistic",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 85.15,
+        "npu_mem_used_mb": 1565,
+        "cpu_total_pct": 28.4,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.83,
+              "bytes": 401759,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.82,
+              "bytes": 461948,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.83,
+              "bytes": 658294,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.83
+        }
+      }
+    },
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo-Children-Drawing",
+      "params": "10B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 10302325233,
+      "context_window": null,
+      "elapsed_s": 26.3,
+      "npu_mem_total_mb": 3598,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:26:06-0500",
+        "resident": [
+          {
+            "model": "Tongyi-MAI/Z-Image-Turbo-Children-Drawing",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 61.19,
+        "npu_mem_used_mb": 2364,
+        "cpu_total_pct": 24.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.78,
+              "bytes": 686133,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.78,
+              "bytes": 530282,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.77,
+              "bytes": 525149,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.78
+        }
+      }
+    },
+    {
+      "model": "YeiYeiArt/Z-Image-Turbo-CharacterDesignSheet",
+      "params": "10B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 10302258604,
+      "context_window": null,
+      "elapsed_s": 26.4,
+      "npu_mem_total_mb": 6562,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:27:13-0500",
+        "resident": [
+          {
+            "model": "YeiYeiArt/Z-Image-Turbo-CharacterDesignSheet",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 30.24,
+        "npu_mem_used_mb": 3482,
+        "cpu_total_pct": 24.9,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.87,
+              "bytes": 437192,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.8,
+              "bytes": 471797,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.77,
+              "bytes": 600356,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.8
+        }
+      }
+    },
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "params": "10B",
+      "type": "Text-to-Image",
+      "npu_usage": 32,
+      "total_size": 10225914531,
+      "context_window": null,
+      "elapsed_s": 24.1,
+      "npu_mem_total_mb": 9304,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:28:17-0500",
+        "resident": [
+          {
+            "model": "Tongyi-MAI/Z-Image-Turbo",
+            "npu_usage": 32
+          }
+        ],
+        "npu_units_used": 32,
+        "npu_units_free": 68,
+        "npu_util_pct": 28.69,
+        "npu_mem_used_mb": 1154,
+        "cpu_total_pct": 10.7,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.32,
+              "bytes": 453122,
+              "seed": 1000
+            },
+            {
+              "wall_s": 7.9,
+              "bytes": 460038,
+              "seed": 1001
+            },
+            {
+              "wall_s": 7.88,
+              "bytes": 700697,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 7.9
+        }
+      }
+    },
+    {
+      "model": "FireRedTeam/Firered-ASR2-LLM",
+      "params": "8B",
+      "type": "ASR",
+      "npu_usage": 6,
+      "total_size": 9794257096,
+      "context_window": null,
+      "elapsed_s": 3.0,
+      "npu_mem_total_mb": 2837,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:29:06-0500",
+        "resident": [
+          {
+            "model": "FireRedTeam/Firered-ASR2-LLM",
+            "npu_usage": 6
+          }
+        ],
+        "npu_units_used": 6,
+        "npu_units_free": 94,
+        "npu_util_pct": 22.82,
+        "npu_mem_used_mb": 586,
+        "cpu_total_pct": 21.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "asr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "asr": {
+          "runs": [
+            {
+              "audio_s": 2.0,
+              "wall_s": 0.7,
+              "rtf": 2.87,
+              "chars": 2,
+              "text": "\u55ef\u55ef"
+            },
+            {
+              "audio_s": 5.0,
+              "wall_s": 0.91,
+              "rtf": 5.49,
+              "chars": 3,
+              "text": "\u55ef\u55ef\u55ef"
+            },
+            {
+              "audio_s": 10.0,
+              "wall_s": 1.35,
+              "rtf": 7.42,
+              "chars": 3,
+              "text": "\u55ef\u55ef\u55ef"
+            }
+          ],
+          "rtf": 5.49,
+          "returned_text": true
+        }
+      }
+    },
+    {
+      "model": "nvidia/Nemotron-3-Embed-8b-Bf16",
+      "params": "8B",
+      "type": "Text Embedding",
+      "npu_usage": 20,
+      "total_size": 8125519734,
+      "context_window": null,
+      "elapsed_s": 18.5,
+      "npu_mem_total_mb": 13845,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:29:54-0500",
+        "resident": [
+          {
+            "model": "nvidia/Nemotron-3-Embed-8b-Bf16",
+            "npu_usage": 20
+          }
+        ],
+        "npu_units_used": 20,
+        "npu_units_free": 80,
+        "npu_util_pct": 48.84,
+        "npu_mem_used_mb": 3485,
+        "cpu_total_pct": 20.5,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.547,
+              "returned": 1,
+              "dim": 4096,
+              "per_s": 1.8
+            },
+            {
+              "batch": 8,
+              "wall_s": 3.601,
+              "returned": 8,
+              "dim": 4096,
+              "per_s": 2.2
+            },
+            {
+              "batch": 32,
+              "wall_s": 14.38,
+              "returned": 32,
+              "dim": 4096,
+              "per_s": 2.2
+            }
+          ],
+          "emb_per_s": 2.2,
+          "dim": 4096
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Embedding-8b",
+      "params": "8B",
+      "type": "Text Embedding",
+      "npu_usage": 18,
+      "total_size": 7753656968,
+      "context_window": null,
+      "elapsed_s": 8.6,
+      "npu_mem_total_mb": 13383,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:30:33-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Embedding-8b",
+            "npu_usage": 18
+          }
+        ],
+        "npu_units_used": 18,
+        "npu_units_free": 82,
+        "npu_util_pct": 73.46,
+        "npu_mem_used_mb": 7244,
+        "cpu_total_pct": 10.2,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.322,
+              "returned": 1,
+              "dim": 4096,
+              "per_s": 3.1
+            },
+            {
+              "batch": 8,
+              "wall_s": 1.683,
+              "returned": 8,
+              "dim": 4096,
+              "per_s": 4.8
+            },
+            {
+              "batch": 32,
+              "wall_s": 6.589,
+              "returned": 32,
+              "dim": 4096,
+              "per_s": 4.9
+            }
+          ],
+          "emb_per_s": 4.9,
+          "dim": 4096
+        }
+      }
+    },
+    {
+      "model": "fal/FLUX.2-klein-4B-Object-Remove",
+      "params": "4B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 7316757787,
+      "context_window": null,
+      "elapsed_s": 24.1,
+      "npu_mem_total_mb": 13830,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:31:55-0500",
+        "resident": [
+          {
+            "model": "fal/FLUX.2-klein-4B-Object-Remove",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 49.95,
+        "npu_mem_used_mb": 4147,
+        "cpu_total_pct": 10.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.04,
+              "bytes": 581470,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.05,
+              "bytes": 578540,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.04,
+              "bytes": 545745,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.04
+        }
+      }
+    },
+    {
+      "model": "black-forest-labs/FLUX.2-klein-4B",
+      "params": "4B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 7316593883,
+      "context_window": null,
+      "elapsed_s": 24.1,
+      "npu_mem_total_mb": 1408,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:33:24-0500",
+        "resident": [
+          {
+            "model": "black-forest-labs/FLUX.2-klein-4B",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 50.87,
+        "npu_mem_used_mb": 499,
+        "cpu_total_pct": 15.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.05,
+              "bytes": 548412,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.01,
+              "bytes": 616391,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.0,
+              "bytes": 531642,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.01
+        }
+      }
+    },
+    {
+      "model": "fal/FLUX.2-klein-4B-Outpaint",
+      "params": "4B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 7316370994,
+      "context_window": null,
+      "elapsed_s": 24.2,
+      "npu_mem_total_mb": 14301,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:34:57-0500",
+        "resident": [
+          {
+            "model": "fal/FLUX.2-klein-4B-Outpaint",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 84.69,
+        "npu_mem_used_mb": 11054,
+        "cpu_total_pct": 15.5,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.05,
+              "bytes": 632132,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.05,
+              "bytes": 623498,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.07,
+              "bytes": 583948,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.05
+        }
+      }
+    },
+    {
+      "model": "fal/FLUX.2-klein-4B-Background-Remove",
+      "params": "4B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 7316357000,
+      "context_window": null,
+      "elapsed_s": 24.1,
+      "npu_mem_total_mb": 14437,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:36:31-0500",
+        "resident": [
+          {
+            "model": "fal/FLUX.2-klein-4B-Background-Remove",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 28.49,
+        "npu_mem_used_mb": 7020,
+        "cpu_total_pct": 11.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.06,
+              "bytes": 541804,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.05,
+              "bytes": 576159,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.02,
+              "bytes": 395762,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.05
+        }
+      }
+    },
+    {
+      "model": "fal/FLUX.2-klein-4B-Zoom",
+      "params": "4B",
+      "type": "Text-to-Image",
+      "npu_usage": 26,
+      "total_size": 7316339396,
+      "context_window": null,
+      "elapsed_s": 24.1,
+      "npu_mem_total_mb": 5838,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:38:04-0500",
+        "resident": [
+          {
+            "model": "fal/FLUX.2-klein-4B-Zoom",
+            "npu_usage": 26
+          }
+        ],
+        "npu_units_used": 26,
+        "npu_units_free": 74,
+        "npu_util_pct": 6.31,
+        "npu_mem_used_mb": 750,
+        "cpu_total_pct": 11.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "image"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "image": {
+          "runs": [
+            {
+              "wall_s": 8.02,
+              "bytes": 562445,
+              "seed": 1000
+            },
+            {
+              "wall_s": 8.03,
+              "bytes": 615166,
+              "seed": 1001
+            },
+            {
+              "wall_s": 8.02,
+              "bytes": 521947,
+              "seed": 1002
+            }
+          ],
+          "s_per_image": 8.02
+        }
+      }
+    },
+    {
+      "model": "tencent/SongGeneration-v2-large",
+      "params": "4B",
+      "type": "Music Generation",
+      "npu_usage": 28,
+      "total_size": 6863542044,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 2140,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:38:53-0500",
+        "resident": [
+          {
+            "model": "tencent/SongGeneration-v2-large",
+            "npu_usage": 28
+          }
+        ],
+        "npu_units_used": 28,
+        "npu_units_free": 72,
+        "npu_util_pct": 93.83,
+        "npu_mem_used_mb": 847,
+        "cpu_total_pct": 13.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "music"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "music": {
+          "path": "gateway/v1/music/generate",
+          "status": 400,
+          "content_type": "application/json",
+          "note": "neither a WAV nor a session id came back",
+          "body": "{\"_error\": \"HTTP Error 400: Bad Request\", \"_status\": 400, \"_body\": \"{\\\"audio_data\\\":null,\\\"audio_format\\\":\\\"wav\\\",\\\"audio_outputs\\\":{},\\\"channels\\\":0,\\\"duration\\\":0.0,\\\"error\\\":\\\"Extra inputs are not permitted in request: duration\\\",\\\"error_code\\\":\\\"INVALID_REQUEST\\\",\\\"error_details\\\":{},\\\"metadata\\\":{},\\\"prompt\\\":\\\"\\\",\\\"sample_count\\\":0,\\\"sample_rate\\\":0,\\\"session_id\\\":\\\"535fde3d-cd19-431b-9483-6f902c51a6d7\\\",\\\"success\\\":false}\", \"_ctype\": \"application/json\"}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "music": null
+      }
+    },
+    {
+      "model": "Qwen/Qwen3.5-9B",
+      "params": "9B",
+      "type": "Image-Text-to-Text",
+      "npu_usage": 16,
+      "total_size": 5535914295,
+      "context_window": null,
+      "elapsed_s": 256.5,
+      "npu_mem_total_mb": 7955,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:39:26-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3.5-9B",
+            "npu_usage": 16
+          }
+        ],
+        "npu_units_used": 16,
+        "npu_units_free": 84,
+        "npu_util_pct": 68.43,
+        "npu_mem_used_mb": 1198,
+        "cpu_total_pct": 16.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 172.38,
+            "decode_tok_s": 40.92,
+            "prefill_ms": 417.7,
+            "ttft_s": 0.442,
+            "cached_tokens": 0,
+            "wall_s": 0.785
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 585.24,
+            "decode_tok_s": 39.67,
+            "prefill_ms": 567.3,
+            "ttft_s": 0.592,
+            "cached_tokens": 0,
+            "wall_s": 0.87
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 1240.28,
+            "decode_tok_s": 39.87,
+            "prefill_ms": 1215.9,
+            "ttft_s": 1.241,
+            "cached_tokens": 72,
+            "wall_s": 1.577
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 1356.33,
+            "decode_tok_s": 40.87,
+            "prefill_ms": 3642.2,
+            "ttft_s": 3.667,
+            "cached_tokens": 1320,
+            "wall_s": 4.005
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 95.12,
+            "decode_tok_s": 20.92,
+            "prefill_ms": 473.1,
+            "ttft_s": 0.521,
+            "cached_tokens": 0,
+            "wall_s": 72.402
+          },
+          "telemetry_before": {
+            "npu_util_pct": 22.63,
+            "npu_mem_used_mb": 2553,
+            "npu_mem_total_mb": 3336,
+            "cpu_total_pct": 11.9
+          },
+          "telemetry_after": {
+            "npu_util_pct": 23.37,
+            "npu_mem_used_mb": 543,
+            "npu_mem_total_mb": 4664,
+            "cpu_total_pct": 33.3
+          },
+          "during": {
+            "samples": 60,
+            "npu_util_peak": 98.38,
+            "npu_util_median": 54.4,
+            "npu_mem_peak_mb": 11811,
+            "npu_mem_total_mb": 3336
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 19.04,
+            "per_stream_tok_s": 21.06,
+            "wall_s": 8.4,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 19.71,
+            "per_stream_tok_s": 21.32,
+            "wall_s": 16.24,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 20.04,
+            "per_stream_tok_s": 21.32,
+            "wall_s": 31.94,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 20.11,
+            "per_stream_tok_s": 21.32,
+            "wall_s": 63.66,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 453,
+            "prefill_tok_s": 114.86,
+            "decode_tok_s": 21.15,
+            "prefill_ms": 391.8,
+            "ttft_s": 0.439,
+            "cached_tokens": 0,
+            "wall_s": 22.29
+          },
+          "on": {
+            "prompt_tokens": 43,
+            "out_tokens": 700,
+            "prefill_tok_s": 103.67,
+            "decode_tok_s": 21.15,
+            "prefill_ms": 414.8,
+            "ttft_s": 0.462,
+            "cached_tokens": 0,
+            "wall_s": 33.99
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-8B",
+      "params": "8B",
+      "type": "Text Generation",
+      "npu_usage": 28,
+      "total_size": 4254394943,
+      "context_window": null,
+      "elapsed_s": 246.3,
+      "npu_mem_total_mb": 3441,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:44:04-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-8B",
+            "npu_usage": 28
+          }
+        ],
+        "npu_units_used": 28,
+        "npu_units_free": 72,
+        "npu_util_pct": 61.64,
+        "npu_mem_used_mb": 1002,
+        "cpu_total_pct": 31.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 72,
+            "out_tokens": 2,
+            "prefill_tok_s": 532.69,
+            "decode_tok_s": 42.77,
+            "prefill_ms": 135.2,
+            "ttft_s": 0.159,
+            "cached_tokens": 0,
+            "wall_s": 0.279
+          },
+          {
+            "prompt_tokens": 332,
+            "out_tokens": 2,
+            "prefill_tok_s": 1146.41,
+            "decode_tok_s": 41.75,
+            "prefill_ms": 241.6,
+            "ttft_s": 0.266,
+            "cached_tokens": 55,
+            "wall_s": 0.35
+          },
+          {
+            "prompt_tokens": 1580,
+            "out_tokens": 2,
+            "prefill_tok_s": 1899.7,
+            "decode_tok_s": 38.51,
+            "prefill_ms": 665.9,
+            "ttft_s": 0.692,
+            "cached_tokens": 315,
+            "wall_s": 0.759
+          },
+          {
+            "prompt_tokens": 6260,
+            "out_tokens": 2,
+            "prefill_tok_s": 1418.59,
+            "decode_tok_s": 35.48,
+            "prefill_ms": 3311.0,
+            "ttft_s": 3.339,
+            "cached_tokens": 1563,
+            "wall_s": 3.445
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 45,
+            "out_tokens": 1500,
+            "prefill_tok_s": 308.13,
+            "decode_tok_s": 20.36,
+            "prefill_ms": 136.3,
+            "ttft_s": 0.185,
+            "cached_tokens": 3,
+            "wall_s": 73.862
+          },
+          "telemetry_before": {
+            "npu_util_pct": 6.69,
+            "npu_mem_used_mb": 7228,
+            "npu_mem_total_mb": 9219,
+            "cpu_total_pct": 31.5
+          },
+          "telemetry_after": {
+            "npu_util_pct": 1.03,
+            "npu_mem_used_mb": 2464,
+            "npu_mem_total_mb": 7437,
+            "cpu_total_pct": 31.9
+          },
+          "during": {
+            "samples": 62,
+            "npu_util_peak": 99.98,
+            "npu_util_median": 40.5,
+            "npu_mem_peak_mb": 9963,
+            "npu_mem_total_mb": 9219
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 20.47,
+            "per_stream_tok_s": 21.2,
+            "wall_s": 7.82,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 21.01,
+            "per_stream_tok_s": 21.37,
+            "wall_s": 15.23,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 20.96,
+            "per_stream_tok_s": 21.37,
+            "wall_s": 30.53,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 20.97,
+            "per_stream_tok_s": 21.41,
+            "wall_s": 61.04,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 45,
+            "out_tokens": 398,
+            "prefill_tok_s": 338.48,
+            "decode_tok_s": 21.13,
+            "prefill_ms": 124.1,
+            "ttft_s": 0.171,
+            "cached_tokens": 3,
+            "wall_s": 19.164
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 700,
+            "prefill_tok_s": 18.28,
+            "decode_tok_s": 20.98,
+            "prefill_ms": 54.7,
+            "ttft_s": 0.102,
+            "cached_tokens": 40,
+            "wall_s": 33.466
+          }
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Embedding-4b",
+      "params": "4B",
+      "type": "Text Embedding",
+      "npu_usage": 23,
+      "total_size": 4192218591,
+      "context_window": null,
+      "elapsed_s": 6.1,
+      "npu_mem_total_mb": 4053,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:48:32-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Embedding-4b",
+            "npu_usage": 23
+          }
+        ],
+        "npu_units_used": 23,
+        "npu_units_free": 77,
+        "npu_util_pct": 59.27,
+        "npu_mem_used_mb": 2041,
+        "cpu_total_pct": 30.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.248,
+              "returned": 1,
+              "dim": 2560,
+              "per_s": 4.0
+            },
+            {
+              "batch": 8,
+              "wall_s": 1.185,
+              "returned": 8,
+              "dim": 2560,
+              "per_s": 6.7
+            },
+            {
+              "batch": 32,
+              "wall_s": 4.652,
+              "returned": 32,
+              "dim": 2560,
+              "per_s": 6.9
+            }
+          ],
+          "emb_per_s": 6.9,
+          "dim": 2560
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-ASR-1.7B",
+      "params": "1.7B",
+      "type": "ASR",
+      "npu_usage": 7,
+      "total_size": 3640844393,
+      "context_window": null,
+      "elapsed_s": 2.3,
+      "npu_mem_total_mb": 13694,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:48:55-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-ASR-1.7B",
+            "npu_usage": 7
+          }
+        ],
+        "npu_units_used": 7,
+        "npu_units_free": 93,
+        "npu_util_pct": 55.44,
+        "npu_mem_used_mb": 8889,
+        "cpu_total_pct": 28.4,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "asr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "asr": {
+          "runs": [
+            {
+              "audio_s": 2.0,
+              "wall_s": 0.61,
+              "rtf": 3.3,
+              "chars": 0,
+              "text": ""
+            },
+            {
+              "audio_s": 5.0,
+              "wall_s": 0.71,
+              "rtf": 7.03,
+              "chars": 0,
+              "text": ""
+            },
+            {
+              "audio_s": 10.0,
+              "wall_s": 0.96,
+              "rtf": 10.39,
+              "chars": 0,
+              "text": ""
+            }
+          ],
+          "rtf": 7.03,
+          "returned_text": false
+        }
+      }
+    },
+    {
+      "model": "FunAudioLLM/Fun-ASR-MLT-Nano",
+      "params": "1B",
+      "type": "ASR",
+      "npu_usage": 6,
+      "total_size": 2724462415,
+      "context_window": null,
+      "elapsed_s": 2.5,
+      "npu_mem_total_mb": 6454,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:49:18-0500",
+        "resident": [
+          {
+            "model": "FunAudioLLM/Fun-ASR-MLT-Nano",
+            "npu_usage": 6
+          }
+        ],
+        "npu_units_used": 6,
+        "npu_units_free": 94,
+        "npu_util_pct": 53.31,
+        "npu_mem_used_mb": 3079,
+        "cpu_total_pct": 27.9,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "asr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "asr": {
+          "runs": [
+            {
+              "audio_s": 2.0,
+              "wall_s": 0.51,
+              "rtf": 3.92,
+              "chars": 12,
+              "text": "\u5f31\u3081\u308b\u524d\u306b\u6392\u9664\u3067\u304d\u308c\u3070\u3002"
+            },
+            {
+              "audio_s": 5.0,
+              "wall_s": 0.62,
+              "rtf": 8.04,
+              "chars": 13,
+              "text": "\u3053\u308c\u3092\u3059\u308b\u524d\u306b\u3069\u3046\u3059\u308c\u3070\uff1f"
+            },
+            {
+              "audio_s": 10.0,
+              "wall_s": 1.34,
+              "rtf": 7.46,
+              "chars": 90,
+              "text": "Luciano estaba buscando que no falle en otra manera, sino su c\u00f3mo accedi\u00f3 al Plan Claudio."
+            }
+          ],
+          "rtf": 7.46,
+          "returned_text": true
+        }
+      }
+    },
+    {
+      "model": "FunAudioLLM/Fun-ASR-Nano",
+      "params": "1B",
+      "type": "ASR",
+      "npu_usage": 7,
+      "total_size": 2687676435,
+      "context_window": null,
+      "elapsed_s": 2.9,
+      "npu_mem_total_mb": 12384,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:49:41-0500",
+        "resident": [
+          {
+            "model": "FunAudioLLM/Fun-ASR-Nano",
+            "npu_usage": 7
+          }
+        ],
+        "npu_units_used": 7,
+        "npu_units_free": 93,
+        "npu_util_pct": 28.91,
+        "npu_mem_used_mb": 5183,
+        "cpu_total_pct": 26.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "asr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "asr": {
+          "runs": [
+            {
+              "audio_s": 2.0,
+              "wall_s": 0.75,
+              "rtf": 2.65,
+              "chars": 22,
+              "text": "\u9ec4\u9e64\u697c\u5f64\u4e00\u5929\u771f\u50cf\u4e2a\u68a6\u6211\u62ac\u5934\u770b\u5230\u90a3\u6843\u82b1\u513f\u4e00\u6837\u7f8e"
+            },
+            {
+              "audio_s": 5.0,
+              "wall_s": 0.83,
+              "rtf": 6.04,
+              "chars": 23,
+              "text": "\u600e\u4e48\u7761\u89c9\u5440\u8fd8\u7761\u7740\u4e86\uff0c\u90a3\u4f60\u4eec\u8d76\u7d27\u8df3\u8d77\u6765\u7761\u89c9\u53bb\u5427\u3002"
+            },
+            {
+              "audio_s": 10.0,
+              "wall_s": 1.23,
+              "rtf": 8.13,
+              "chars": 33,
+              "text": "\u7f57\u6cca\u8231\u7f3a\u9677\u68c0\u6d4b\u4e0e\u7814\u7a76\u3002\u5b83\u4eec\u4ee5\u53ca\u7ec8\u7aef\u8bbe\u5907\u5728\u4f7f\u7528\u7684\u8fc7\u7a0b\u4e2d\u4ecd\u7136\u5b58\u5728\u8bef\u5dee\u3002"
+            }
+          ],
+          "rtf": 6.04,
+          "returned_text": true
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+      "params": "1.7B",
+      "type": "Text-to-Speech",
+      "npu_usage": 5,
+      "total_size": 2545421603,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 2318,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:50:01-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+            "npu_usage": 5
+          }
+        ],
+        "npu_units_used": 5,
+        "npu_units_free": 95,
+        "npu_util_pct": 90.26,
+        "npu_mem_used_mb": 548,
+        "cpu_total_pct": 12.2,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "speech"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "speech": null
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+      "params": "1.7B",
+      "type": "Text-to-Speech",
+      "npu_usage": 5,
+      "total_size": 2443149780,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 1141,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:50:18-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+            "npu_usage": 5
+          }
+        ],
+        "npu_units_used": 5,
+        "npu_units_free": 95,
+        "npu_util_pct": 72.0,
+        "npu_mem_used_mb": 304,
+        "cpu_total_pct": 12.0,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "speech"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "speech": null
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+      "params": "1.7B",
+      "type": "Text-to-Speech",
+      "npu_usage": 7,
+      "total_size": 2443076247,
+      "context_window": null,
+      "elapsed_s": 14.6,
+      "npu_mem_total_mb": 13528,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:50:35-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+            "npu_usage": 7
+          }
+        ],
+        "npu_units_used": 7,
+        "npu_units_free": 93,
+        "npu_util_pct": 48.94,
+        "npu_mem_used_mb": 6116,
+        "cpu_total_pct": 23.8,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "speech"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "speech": {
+          "runs": [
+            {
+              "chars": 44,
+              "wall_s": 1.95,
+              "audio_s": 3.12,
+              "rtf": 1.6
+            },
+            {
+              "chars": 126,
+              "wall_s": 5.82,
+              "audio_s": 9.2,
+              "rtf": 1.58
+            },
+            {
+              "chars": 137,
+              "wall_s": 6.81,
+              "audio_s": 10.64,
+              "rtf": 1.56
+            }
+          ],
+          "rtf": 1.58
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Vl-Embedding-2b",
+      "params": "2B",
+      "type": "Text Embedding",
+      "npu_usage": 8,
+      "total_size": 2395538079,
+      "context_window": null,
+      "elapsed_s": 4.8,
+      "npu_mem_total_mb": 1562,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:51:23-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Vl-Embedding-2b",
+            "npu_usage": 8
+          }
+        ],
+        "npu_units_used": 8,
+        "npu_units_free": 92,
+        "npu_util_pct": 54.01,
+        "npu_mem_used_mb": 853,
+        "cpu_total_pct": 11.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.213,
+              "returned": 1,
+              "dim": 2048,
+              "per_s": 4.7
+            },
+            {
+              "batch": 8,
+              "wall_s": 0.822,
+              "returned": 8,
+              "dim": 2048,
+              "per_s": 9.7
+            },
+            {
+              "batch": 32,
+              "wall_s": 3.725,
+              "returned": 32,
+              "dim": 2048,
+              "per_s": 8.6
+            }
+          ],
+          "emb_per_s": 9.7,
+          "dim": 2048
+        }
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "params": "4B",
+      "type": "Text Generation",
+      "npu_usage": 25,
+      "total_size": 2349786917,
+      "context_window": null,
+      "elapsed_s": 250.4,
+      "npu_mem_total_mb": 8488,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:51:53-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-4B-Instruct-2507",
+            "npu_usage": 25
+          }
+        ],
+        "npu_units_used": 25,
+        "npu_units_free": 75,
+        "npu_util_pct": 43.59,
+        "npu_mem_used_mb": 6130,
+        "cpu_total_pct": 21.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "tests_skipped": [],
+      "unparsed": null,
+      "results": {
+        "prefill": [
+          {
+            "prompt_tokens": 68,
+            "out_tokens": 2,
+            "prefill_tok_s": 584.06,
+            "decode_tok_s": 39.7,
+            "prefill_ms": 111.3,
+            "ttft_s": 0.136,
+            "cached_tokens": 3,
+            "wall_s": 0.21
+          },
+          {
+            "prompt_tokens": 328,
+            "out_tokens": 2,
+            "prefill_tok_s": 1358.92,
+            "decode_tok_s": 39.12,
+            "prefill_ms": 200.9,
+            "ttft_s": 0.226,
+            "cached_tokens": 55,
+            "wall_s": 0.296
+          },
+          {
+            "prompt_tokens": 1576,
+            "out_tokens": 2,
+            "prefill_tok_s": 2276.79,
+            "decode_tok_s": 36.4,
+            "prefill_ms": 553.9,
+            "ttft_s": 0.581,
+            "cached_tokens": 315,
+            "wall_s": 0.658
+          },
+          {
+            "prompt_tokens": 6256,
+            "out_tokens": 2,
+            "prefill_tok_s": 1589.55,
+            "decode_tok_s": 33.72,
+            "prefill_ms": 2952.4,
+            "ttft_s": 2.982,
+            "cached_tokens": 1563,
+            "wall_s": 3.074
+          }
+        ],
+        "sustained": {
+          "run": {
+            "prompt_tokens": 41,
+            "out_tokens": 1500,
+            "prefill_tok_s": 353.37,
+            "decode_tok_s": 19.05,
+            "prefill_ms": 107.5,
+            "ttft_s": 0.16,
+            "cached_tokens": 3,
+            "wall_s": 78.905
+          },
+          "telemetry_before": {
+            "npu_util_pct": 83.42,
+            "npu_mem_used_mb": 198,
+            "npu_mem_total_mb": 1347,
+            "cpu_total_pct": 16.0
+          },
+          "telemetry_after": {
+            "npu_util_pct": 12.81,
+            "npu_mem_used_mb": 7031,
+            "npu_mem_total_mb": 8915,
+            "cpu_total_pct": 33.4
+          },
+          "during": {
+            "samples": 66,
+            "npu_util_peak": 98.88,
+            "npu_util_median": 55.1,
+            "npu_mem_peak_mb": 11019,
+            "npu_mem_total_mb": 1347
+          }
+        },
+        "concurrency": [
+          {
+            "parallel": 1,
+            "aggregate_tok_s": 18.87,
+            "per_stream_tok_s": 19.88,
+            "wall_s": 8.48,
+            "ok": 1,
+            "failed": 0
+          },
+          {
+            "parallel": 2,
+            "aggregate_tok_s": 19.56,
+            "per_stream_tok_s": 19.87,
+            "wall_s": 16.36,
+            "ok": 2,
+            "failed": 0
+          },
+          {
+            "parallel": 4,
+            "aggregate_tok_s": 19.61,
+            "per_stream_tok_s": 19.93,
+            "wall_s": 32.64,
+            "ok": 4,
+            "failed": 0
+          },
+          {
+            "parallel": 8,
+            "aggregate_tok_s": 19.52,
+            "per_stream_tok_s": 19.92,
+            "wall_s": 65.56,
+            "ok": 8,
+            "failed": 0
+          }
+        ],
+        "thinking": {
+          "off": {
+            "prompt_tokens": 41,
+            "out_tokens": 468,
+            "prefill_tok_s": 373.99,
+            "decode_tok_s": 19.66,
+            "prefill_ms": 101.6,
+            "ttft_s": 0.152,
+            "cached_tokens": 3,
+            "wall_s": 24.324
+          },
+          "on": {
+            "prompt_tokens": 41,
+            "out_tokens": 383,
+            "prefill_tok_s": 17.21,
+            "decode_tok_s": 19.71,
+            "prefill_ms": 58.1,
+            "ttft_s": 0.109,
+            "cached_tokens": 40,
+            "wall_s": 19.525
+          }
+        }
+      }
+    },
+    {
+      "model": "zai-org/GLM-OCR",
+      "params": "0.9B",
+      "type": "Image-to-Text",
+      "npu_usage": 4,
+      "total_size": 1885468032,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 8564,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:56:29-0500",
+        "resident": [
+          {
+            "model": "zai-org/GLM-OCR",
+            "npu_usage": 4
+          }
+        ],
+        "npu_units_used": 4,
+        "npu_units_free": 96,
+        "npu_util_pct": 48.22,
+        "npu_mem_used_mb": 6786,
+        "cpu_total_pct": 30.3,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "ocr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "ocr": {
+          "path": "gateway/v1/ocr",
+          "status": 404,
+          "content_type": "application/json",
+          "note": "the response could not be read as this test expects",
+          "body": "{\"_error\": \"HTTP Error 404: Not Found\", \"_status\": 404, \"_body\": \"{\\\"error\\\":\\\"Endpoint not found\\\"}\", \"_ctype\": \"application/json\"}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "ocr": null
+      }
+    },
+    {
+      "model": "RoyalCities/Foundation-1",
+      "params": "2B",
+      "type": "Music Generation",
+      "npu_usage": 5,
+      "total_size": 1392801988,
+      "context_window": null,
+      "elapsed_s": 1937.2,
+      "npu_mem_total_mb": 10285,
+      "conditions_at_start": {
+        "at": "2026-09-19T14:56:51-0500",
+        "resident": [
+          {
+            "model": "RoyalCities/Foundation-1",
+            "npu_usage": 5
+          }
+        ],
+        "npu_units_used": 5,
+        "npu_units_free": 95,
+        "npu_util_pct": 28.56,
+        "npu_mem_used_mb": 6443,
+        "cpu_total_pct": 28.5,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "music"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "music": {
+          "path": "gateway/v1/music/generate",
+          "status": null,
+          "content_type": null,
+          "note": "neither a WAV nor a session id came back",
+          "body": "{\"success\":true,\"audio_data\":\"UklGRmTVNQBXQVZFZm10IBAAAAABAAIARKwAABCxAgAEABAAZGF0YUDVNQAAAAAA/f/+/wEAAAD+////AQAAAP7///8AAP///v///wAA///+////AAD//////////////////////////wAA/////wAAAAD/////AQAAAP7///8AAP////8AAAAAAAD//wAAAAD/////AAD///////8AAAAAAAAAAAAA////////////////AAD///////8AAAAA/////wAA////////////////////////AAAAAP///////////////wAAAAD/////AAAAAP////8AAAAA/////wAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAAAAAAAAAAAAAAAAAEAAQAAAAEAAAAAAAAAAAABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAABAAAAAAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAD/////////////AAD//wAAAAAAAAAA/////wAA//8AAAAAAAD//////////wAAAAD/////////////////////AAAAAP//////////AAAAAAAAAAAAAAAA/////wAAAAAAAAAA//8AAP////8AAAAA/////wAAAAD//wAA/////wAAAAAAAAAAAAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAAAAAAD/////AAAAAP///////////v/+//////////////////////////////////////8AAP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////////////wAAAAAAAAAAAAD//wAAAAAAAAAAAAAAAP///////wAAAAAAAP//AAD/////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////////////AAAAAAAAAAAAAAAAAAAAAAAA//8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////wAAAAAAAAAA//////////8AAP///////wAA//8AAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAA/////wAAAAAAAAAA//////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////AAAAAP///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAA////////AAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAAP////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////AAAAAAAAAAAAAAAAAAAAAAAA//8AAP////8AAP////////////8AAAAA////////////////////////AAD///////8AAAAAAAD///////////////8AAAAA//8AAP////////////8AAP////////////8AAP//AAAAAAAAAA",
+          "truncated": false
+        }
+      },
+      "results": {
+        "music": null
+      }
+    },
+    {
+      "model": "nvidia/Nemotron-3-Embed-1B-BF16",
+      "params": "1B",
+      "type": "Text Embedding",
+      "npu_usage": 7,
+      "total_size": 1319317874,
+      "context_window": null,
+      "elapsed_s": 4.0,
+      "npu_mem_total_mb": 1453,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:29:33-0500",
+        "resident": [
+          {
+            "model": "nvidia/Nemotron-3-Embed-1B-BF16",
+            "npu_usage": 7
+          }
+        ],
+        "npu_units_used": 7,
+        "npu_units_free": 93,
+        "npu_util_pct": 11.42,
+        "npu_mem_used_mb": 336,
+        "cpu_total_pct": 10.3,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": {
+          "runs": [
+            {
+              "batch": 1,
+              "wall_s": 0.2,
+              "returned": 1,
+              "dim": 2048,
+              "per_s": 5.0
+            },
+            {
+              "batch": 8,
+              "wall_s": 0.777,
+              "returned": 8,
+              "dim": 2048,
+              "per_s": 10.3
+            },
+            {
+              "batch": 32,
+              "wall_s": 3.062,
+              "returned": 32,
+              "dim": 2048,
+              "per_s": 10.5
+            }
+          ],
+          "emb_per_s": 10.5,
+          "dim": 2048
+        }
+      }
+    },
+    {
+      "model": "Supertone/supertonic-3",
+      "params": "0.1B",
+      "type": "Text-to-Speech",
+      "npu_usage": 0,
+      "total_size": 1032671056,
+      "context_window": null,
+      "elapsed_s": 0.1,
+      "npu_mem_total_mb": 16367,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:29:50-0500",
+        "resident": [
+          {
+            "model": "Supertone/supertonic-3",
+            "npu_usage": 0
+          }
+        ],
+        "npu_units_used": null,
+        "npu_units_free": 100,
+        "npu_util_pct": 26.03,
+        "npu_mem_used_mb": 11921,
+        "cpu_total_pct": 12.7,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "speech"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "speech": null
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Embedding-0.6B",
+      "params": "0.6B",
+      "type": "Text Embedding",
+      "npu_usage": 1,
+      "total_size": 924213804,
+      "context_window": null,
+      "elapsed_s": 0.1,
+      "npu_mem_total_mb": 3581,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:30:03-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Embedding-0.6B",
+            "npu_usage": 1
+          }
+        ],
+        "npu_units_used": 1,
+        "npu_units_free": 99,
+        "npu_util_pct": 38.71,
+        "npu_mem_used_mb": 774,
+        "cpu_total_pct": 10.2,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": null
+      }
+    },
+    {
+      "model": "tencent/R3-embedding-0.6b",
+      "params": "0.6B",
+      "type": "Text Embedding",
+      "npu_usage": 4,
+      "total_size": 756288553,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 10336,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:30:16-0500",
+        "resident": [
+          {
+            "model": "tencent/R3-embedding-0.6b",
+            "npu_usage": 4
+          }
+        ],
+        "npu_units_used": 4,
+        "npu_units_free": 96,
+        "npu_util_pct": 34.62,
+        "npu_mem_used_mb": 1477,
+        "cpu_total_pct": 10.2,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "embed"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "embed": null
+      }
+    },
+    {
+      "model": "Qwen/Qwen3-Reranker-0.6B",
+      "params": "0.6B",
+      "type": "Text Reranking",
+      "npu_usage": 2,
+      "total_size": 712729843,
+      "context_window": null,
+      "elapsed_s": 3.9,
+      "npu_mem_total_mb": 15087,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:30:37-0500",
+        "resident": [
+          {
+            "model": "Qwen/Qwen3-Reranker-0.6B",
+            "npu_usage": 2
+          }
+        ],
+        "npu_units_used": 2,
+        "npu_units_free": 98,
+        "npu_util_pct": 47.74,
+        "npu_mem_used_mb": 6270,
+        "cpu_total_pct": 10.6,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "rerank"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": null,
+      "results": {
+        "rerank": {
+          "runs": [
+            {
+              "docs": 4,
+              "wall_s": 0.275,
+              "returned": 4,
+              "pairs_per_s": 14.5
+            },
+            {
+              "docs": 16,
+              "wall_s": 0.734,
+              "returned": 16,
+              "pairs_per_s": 21.8
+            },
+            {
+              "docs": 64,
+              "wall_s": 2.859,
+              "returned": 64,
+              "pairs_per_s": 22.4
+            }
+          ],
+          "pairs_per_s": 22.4,
+          "top1_correct": true
+        }
+      }
+    },
+    {
+      "model": "PaddlePaddle/PP-DocLayoutV3",
+      "params": "1B",
+      "type": "Image-to-Text",
+      "npu_usage": 20,
+      "total_size": 163769337,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 11347,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:30:58-0500",
+        "resident": [
+          {
+            "model": "PaddlePaddle/PP-DocLayoutV3",
+            "npu_usage": 20
+          }
+        ],
+        "npu_units_used": 20,
+        "npu_units_free": 80,
+        "npu_util_pct": 37.84,
+        "npu_mem_used_mb": 6741,
+        "cpu_total_pct": 8.4,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "ocr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "ocr": {
+          "path": "gateway/v1/ocr",
+          "status": 404,
+          "content_type": null,
+          "note": "the response could not be read as this test expects",
+          "body": "{\"_error\": \"HTTP Error 404: Not Found\", \"_status\": 404, \"_body\": \"\", \"_ctype\": null}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "ocr": null
+      }
+    },
+    {
+      "model": "PaddlePaddle/PP-OCRv6-Medium",
+      "params": "22M",
+      "type": "Image-to-Text",
+      "npu_usage": 1,
+      "total_size": 142380039,
+      "context_window": null,
+      "elapsed_s": 0.1,
+      "npu_mem_total_mb": 3750,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:31:15-0500",
+        "resident": [
+          {
+            "model": "PaddlePaddle/PP-OCRv6-Medium",
+            "npu_usage": 1
+          }
+        ],
+        "npu_units_used": 1,
+        "npu_units_free": 99,
+        "npu_util_pct": 46.0,
+        "npu_mem_used_mb": 2566,
+        "cpu_total_pct": 8.7,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "ocr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "ocr": {
+          "path": "gateway/v1/ocr",
+          "status": 400,
+          "content_type": "application/json",
+          "note": "the response could not be read as this test expects",
+          "body": "{\"_error\": \"HTTP Error 400: Bad Request\", \"_status\": 400, \"_body\": \"{\\\"error\\\":{\\\"code\\\":\\\"model_not_found\\\",\\\"message\\\":\\\"OCR model 'PaddlePaddle/PP-OCRv6-Medium' is not loaded\\\"}}\", \"_ctype\": \"application/json\"}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "ocr": null
+      }
+    },
+    {
+      "model": "PaddlePaddle/PP-OCRv6-Small",
+      "params": "2.48M",
+      "type": "Image-to-Text",
+      "npu_usage": 0,
+      "total_size": 114019465,
+      "context_window": null,
+      "elapsed_s": 0.2,
+      "npu_mem_total_mb": 2088,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:31:32-0500",
+        "resident": [
+          {
+            "model": "PaddlePaddle/PP-OCRv6-Small",
+            "npu_usage": 0
+          }
+        ],
+        "npu_units_used": null,
+        "npu_units_free": 100,
+        "npu_util_pct": 18.74,
+        "npu_mem_used_mb": 677,
+        "cpu_total_pct": 8.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "ocr"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking"
+      ],
+      "unparsed": {
+        "ocr": {
+          "path": "gateway/v1/ocr",
+          "status": 400,
+          "content_type": "application/json",
+          "note": "the response could not be read as this test expects",
+          "body": "{\"_error\": \"HTTP Error 400: Bad Request\", \"_status\": 400, \"_body\": \"{\\\"error\\\":{\\\"code\\\":\\\"model_not_found\\\",\\\"message\\\":\\\"OCR model 'PaddlePaddle/PP-OCRv6-Small' is not loaded\\\"}}\", \"_ctype\": \"application/json\"}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "ocr": null
+      }
+    }
+  ]
+}
