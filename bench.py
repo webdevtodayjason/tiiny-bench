@@ -947,7 +947,16 @@ def _request(target, tok, body, timeout, method, read, raw=None, ctype=None):
                 return r.read() if read else json.load(r)
         except urllib.error.HTTPError as e:
             _mark(target, mode)
-            return {"_error": str(e)[:140]}
+            # The device says why in the body, and flattening that to a status
+            # line threw away the only thing that tells a missing model apart
+            # from a shape this app guessed wrong.
+            try:
+                raw = e.read()[:MAX_CAPTURE]
+                text = raw.decode("utf-8", "replace")
+            except Exception:  # noqa: BLE001
+                text = ""
+            return {"_error": str(e)[:140], "_status": e.code, "_body": text,
+                    "_ctype": e.headers.get("Content-Type") if e.headers else None}
         except Exception as e:  # noqa: BLE001
             err = e
             if mode == "direct" and _refused(e) and not isinstance(target, str):
@@ -1944,6 +1953,72 @@ def _looks_like_a_home_path(text):
     return bool(_HOME_RE.search(text))
 
 
+# =================================================================== #
+#  Two failures that look the same and are not                        #
+# =================================================================== #
+# A test returning nothing can mean the model was not resident, which is
+# ordinary and expected on a box with a hundred NPU units and nine classes of
+# model, or it can mean the device answered in a shape this app did not
+# anticipate, which is a bug here. Those read identically in a result file as
+# a null, and the second one costs a model load to reproduce once the sweep
+# has moved on. So they are recorded differently.
+
+MAX_CAPTURE = 2000
+
+# The envelope the gateway returns when no model of the needed class is
+# running, measured off live firmware. Nothing else on the device uses it.
+NOT_LOADED_TYPE = "service_unavailable"
+
+
+def not_loaded(v):
+    """Whether a failed call failed because no model of that class is up."""
+    if not isinstance(v, dict) or "_error" not in v:
+        return False
+    if v.get("_status") != 503:
+        return False
+    try:
+        err = (json.loads(v.get("_body") or "{}") or {}).get("error") or {}
+    except ValueError:
+        return False
+    return err.get("type") == NOT_LOADED_TYPE or "no suitable model" in str(
+        err.get("message", "")).lower()
+
+
+def not_measured(reason):
+    """What a test returns instead of nothing, so the file says which."""
+    return {"not_measured": reason}
+
+
+# First unexpected response per test per run. A large audio or image payload
+# would bloat a result file, so it is truncated; the status, the path and the
+# content type go with it because those are usually enough on their own.
+UNPARSED = {}
+
+
+def capture(test, path, v, note=""):
+    """Record the first response from this test that could not be used.
+
+    Once per test per run: the tenth copy of the same surprise adds nothing
+    and the first is what gets read. Kept in the result file and passed
+    through public_view on the way out like everything else, because a raw
+    device response could carry anything.
+    """
+    if test in UNPARSED:
+        return
+    body = v if isinstance(v, (str, bytes)) else json.dumps(v, default=str)
+    if isinstance(body, bytes):
+        body = "<%d bytes, not text>" % len(body) if b"\x00" in body[:64] \
+            else body[:MAX_CAPTURE].decode("utf-8", "replace")
+    UNPARSED[test] = {
+        "path": str(path),
+        "status": (v.get("_status") if isinstance(v, dict) else None),
+        "content_type": (v.get("_ctype") if isinstance(v, dict) else None),
+        "note": note or "the response could not be read as this test expects",
+        "body": body[:MAX_CAPTURE],
+        "truncated": len(body) > MAX_CAPTURE,
+    }
+
+
 # ---------------------------------------------------------------- fixtures
 # Four classes of model need something to chew on that is not text. All of it
 # is built here rather than committed, so the repository stays readable and
@@ -2059,7 +2134,14 @@ def t_asr(tok, model):
                      {"file": ("clip.wav", "audio/wav", clip)}, timeout=300)
         wall = time.time() - t0
         if "_error" in r:
+            if not_loaded(r):
+                say("    no ASR model is resident; nothing to measure")
+                return not_measured("no ASR model was resident on the device")
+            capture("asr", gw("/v1/audio/transcriptions"), r)
             say(f"    {secs:>5.1f}s clip FAILED {r['_error'][:55]}"); continue
+        if not isinstance(r.get("text"), str):
+            capture("asr", gw("/v1/audio/transcriptions"), r,
+                    "answered 200 with no text field")
         text = (r.get("text") or "").strip()
         rtf = round(secs / wall, 2) if wall else None
         rows.append({"audio_s": secs, "wall_s": round(wall, 2), "rtf": rtf,
@@ -2111,7 +2193,15 @@ def t_ocr(tok, model):
                 how = "chat completions"
         wall = time.time() - t0
         if text is None:
+            if not_loaded(r):
+                say("    no OCR model is resident; nothing to measure")
+                return not_measured("no Image-to-Text model was resident on the device")
+            capture("ocr", gw("/v1/ocr"), r)
             say(f"    page {i+1} FAILED {str(r.get('_error'))[:55]}"); continue
+        if not _digit_run(text):
+            capture("ocr", gw("/v1/ocr"), {"text_returned": text[:400]},
+                    "answered with no digits in it, so either the page was not "
+                    "read or the reply is shaped differently than expected")
         via = via or how
         got = _digit_run(text)
         rows.append({"wall_s": round(wall, 2), "via": how, "read": got,
@@ -2183,6 +2273,11 @@ def t_music(tok, model):
                 audio, how = _music_wait(tok, sid), "session"
         wall = time.time() - t0
         if not audio:
+            if not_loaded(raw):
+                say("    no music model is resident; nothing to measure")
+                return not_measured("no Music Generation model was resident on the device")
+            capture("music", gw("/v1/music/generate"), raw,
+                    "neither a WAV nor a session id came back")
             say(f"    {want:>3}s FAILED {str(raw)[:60]}"); continue
         secs = _wav_seconds(audio)
         ratio = round(secs / wall, 2) if secs and wall else None
@@ -2238,8 +2333,15 @@ def t_rerank(tok, model):
                  "top_n": len(docs)}, timeout=300)
         wall = time.time() - t0
         if "_error" in r:
+            if not_loaded(r):
+                say("    no reranking model is resident; nothing to measure")
+                return not_measured("no Text Reranking model was resident on the device")
+            capture("rerank", gw("/v1/rerank"), r)
             say(f"    {n:>3} docs FAILED {r['_error'][:55]}"); continue
         ranked = r.get("results") or r.get("data") or []
+        if not ranked:
+            capture("rerank", gw("/v1/rerank"), r,
+                    "answered 200 with neither a results nor a data list")
         rate = round(len(docs) / wall, 1) if wall else 0
         if top1 is None and ranked:
             first = ranked[0]
@@ -2301,6 +2403,9 @@ CHAT_TYPES = set(SUITES)
 
 def suite(tok, model, want, meta, cat=None):
     """One model, all the requested tests, returned as a record."""
+    # Per model, not per process: the web app serves for days and one sweep's
+    # surprise must not be reported against the next sweep's model.
+    UNPARSED.clear()
     tel = telemetry(tok)
     # The resident set at the moment THIS model's tests begin, not at the
     # moment the sweep began. A sweep loads and unloads as it goes, so the
@@ -2322,6 +2427,7 @@ def suite(tok, model, want, meta, cat=None):
         emit("test", model=model, test=name, index=i, total=len(todo))
         results[name] = TESTS[name](tok, model)
         emit("test_done", model=model, test=name, index=i, total=len(todo))
+    unparsed = {k: v for k, v in UNPARSED.items() if k in todo}
     return {
         "model": model,
         "params": meta.get("params"),
@@ -2338,6 +2444,9 @@ def suite(tok, model, want, meta, cat=None):
         "sampling": SAMPLING,
         "tests_run": todo,
         "tests_skipped": skipped,
+        # The first response per test this app could not use. Absent when
+        # everything parsed, which is the common case.
+        "unparsed": unparsed or None,
         "results": results,
     }
 

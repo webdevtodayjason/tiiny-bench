@@ -180,8 +180,13 @@ class TestASR(DeviceCase):
 class TestASRNotLoaded(DeviceCase):
     loaded = [CHAT]
 
-    def test_a_class_that_is_not_running_is_reported_not_crashed(self):
-        self.assertIsNone(bench.t_asr(bench.key(), ASR))
+    def test_a_class_that_is_not_running_says_so_rather_than_going_blank(self):
+        # A null in a result file reads the same whether the model was absent
+        # or the response was a shape this app guessed wrong, and the second
+        # costs a model load to reproduce. They are recorded differently.
+        out = bench.t_asr(bench.key(), ASR)
+        self.assertEqual(out, {"not_measured":
+                               "no ASR model was resident on the device"})
 
 
 # -------------------------------------------------------------------- OCR
@@ -226,8 +231,9 @@ class TestOCRThroughChat(DeviceCase):
 class TestOCRNotLoaded(DeviceCase):
     loaded = [CHAT]
 
-    def test_no_ocr_model_means_no_row(self):
-        self.assertIsNone(bench.t_ocr(bench.key(), OCR))
+    def test_no_ocr_model_says_why(self):
+        self.assertIn("was resident",
+                      bench.t_ocr(bench.key(), OCR)["not_measured"])
 
 
 # ------------------------------------------------------------------ music
@@ -265,8 +271,9 @@ class TestMusicSession(DeviceCase):
 class TestMusicNotLoaded(DeviceCase):
     loaded = [CHAT]
 
-    def test_no_music_model_means_no_row(self):
-        self.assertIsNone(bench.t_music(bench.key(), MUSIC))
+    def test_no_music_model_says_why(self):
+        self.assertIn("was resident",
+                      bench.t_music(bench.key(), MUSIC)["not_measured"])
 
 
 # --------------------------------------------------------------- reranking
@@ -292,11 +299,75 @@ class TestRerank(DeviceCase):
 class TestRerankNotLoaded(DeviceCase):
     loaded = [CHAT]
 
-    def test_no_reranker_means_no_row(self):
-        self.assertIsNone(bench.t_rerank(bench.key(), RERANK))
+    def test_no_reranker_says_why(self):
+        self.assertIn("was resident",
+                      bench.t_rerank(bench.key(), RERANK)["not_measured"])
 
 
 # ------------------------------------------------------------- the registry
+
+class TestTheTwoFailuresAreToldApart(DeviceCase):
+    """A model that is not there, against a shape this app guessed wrong."""
+
+    loaded = [ASR]
+
+    def setUp(self):
+        super().setUp()
+        bench.UNPARSED.clear()
+        self.addCleanup(bench.UNPARSED.clear)
+
+    def test_a_missing_model_is_not_recorded_as_an_unparsed_response(self):
+        self.state.loaded = [CHAT]
+        bench.t_rerank(bench.key(), RERANK)
+        self.assertEqual(bench.UNPARSED, {},
+                         "an ordinary missing model was filed as a surprise")
+
+    def test_an_unexpected_shape_is_captured_once_with_enough_to_chase_it(self):
+        # The reranker answers 200 with a shape nothing here expects.
+        original = self.fake.state
+        import fake_device
+
+        def odd(self_, body):
+            return self_._send(200, {"scores": [0.1, 0.2]})
+        saved = fake_device.FakeHandler._rerank
+        fake_device.FakeHandler._rerank = odd
+        self.addCleanup(setattr, fake_device.FakeHandler, "_rerank", saved)
+        self.state.loaded = [RERANK]
+
+        out = bench.t_rerank(bench.key(), RERANK)
+        self.assertIn("rerank", bench.UNPARSED)
+        shot = bench.UNPARSED["rerank"]
+        self.assertIn("/v1/rerank", shot["path"])
+        self.assertIn("scores", shot["body"])
+        self.assertIn("neither a results nor a data list", shot["note"])
+        self.assertNotIn("not_measured", out or {},
+                         "a parse problem must not read as a missing model")
+
+    def test_only_the_first_surprise_per_test_is_kept(self):
+        bench.capture("rerank", "/v1/rerank", {"a": 1})
+        bench.capture("rerank", "/v1/rerank", {"b": 2})
+        self.assertIn('"a": 1', bench.UNPARSED["rerank"]["body"])
+        self.assertNotIn("b", bench.UNPARSED["rerank"]["body"])
+
+    def test_a_large_payload_is_truncated_rather_than_filed_whole(self):
+        bench.capture("music", "/v1/music/generate", "x" * 50000)
+        shot = bench.UNPARSED["music"]
+        self.assertLessEqual(len(shot["body"]), bench.MAX_CAPTURE)
+        self.assertTrue(shot["truncated"])
+
+    def test_the_capture_does_not_leak_between_models(self):
+        bench.capture("rerank", "/v1/rerank", {"a": 1})
+        rec = bench.suite(bench.key(), ASR, [], {"type": "ASR"})
+        self.assertIsNone(rec["unparsed"],
+                          "a previous model's surprise was filed against this one")
+
+    def test_the_captured_body_goes_out_through_public_view(self):
+        # A raw device response could carry anything, including a path.
+        bench.capture("ocr", "/v1/ocr", {"detail": "/Users/someone/model.bin"})
+        rec = {"models": [{"model": "m", "unparsed": dict(bench.UNPARSED)}]}
+        blob = json.dumps(bench.public_view(rec))
+        self.assertNotIn("/Users/", blob)
+
 
 class TestCoverage(unittest.TestCase):
     """Nine classes, nine suites, and one list rather than two."""

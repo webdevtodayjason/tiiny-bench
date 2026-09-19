@@ -614,6 +614,40 @@ def model_section(run, idx, colour=None):
                     colours={"thinking off": C["steel"], "thinking on": C["copper"]})
             + caption(cap) + "</div>")
 
+    # --- what was not measured, and why ----------------------------------
+    absent = [(k, v["not_measured"]) for k, v in r.items()
+              if isinstance(v, dict) and v.get("not_measured")]
+    if absent:
+        parts.append(
+            '<div class="panel"><div class="ptitle">Not measured</div>'
+            + "".join(f'<p class="lede"><b>{html.escape(k)}</b>: '
+                      f'{html.escape(why)}.</p>' for k, why in absent)
+            + caption('This is not a failed measurement. The box holds one '
+                      'accelerator and a hundred NPU units, so a class of '
+                      'model that was not resident when the sweep reached it '
+                      'has nothing to report, which is a different thing from '
+                      'a measurement that went wrong.')
+            + "</div>")
+
+    # --- a response this app could not read ------------------------------
+    odd = run.get("unparsed") or {}
+    if odd:
+        rows = "".join(
+            f'<tr><td class="mono">{html.escape(k)}</td>'
+            f'<td class="mono">{html.escape(str(v.get("path") or ""))}</td>'
+            f'<td class="num">{html.escape(str(v.get("status") or "200"))}</td>'
+            f'<td>{html.escape(str(v.get("note") or ""))}</td></tr>'
+            for k, v in sorted(odd.items()))
+        parts.append(
+            '<div class="panel"><div class="ptitle">A reply this could not read</div>'
+            '<p class="lede">The device answered and the benchmark did not '
+            'understand the answer. That is a bug here rather than a fault on '
+            'the box, and the first such reply is kept so it can be chased '
+            'without loading the model again.</p>'
+            f'<div class="tablewrap"><table><thead><tr><th>test</th><th>path</th>'
+            f'<th class="num">status</th><th>what was wrong</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></div></div>')
+
     # --- device telemetry ------------------------------------------------
     during = s.get("during") or {}
     after = s.get("telemetry_after") or {}
@@ -1024,6 +1058,20 @@ def markdown(outdir: pathlib.Path, cat=None) -> str:
                               f'{th[k].get("out_tokens", 0):,}',
                               f'{th[k].get("decode_tok_s", 0):.1f}',
                               f'{th[k].get("ttft_s", 0):.2f} s') for k in ("off", "on")]), ""]
+        absent = [(k, v["not_measured"]) for k, v in res.items()
+                  if isinstance(v, dict) and v.get("not_measured")]
+        if absent:
+            L += ["**Not measured**", ""]
+            L += [f"- `{k}`: {why}." for k, why in absent]
+            L += ["", "Not a failed measurement: a class of model that was not "
+                      "resident when the sweep reached it has nothing to report.", ""]
+        odd = r.get("unparsed") or {}
+        if odd:
+            L += ["**A reply this could not read**", "",
+                  _md_table(["test", "path", "status", "what was wrong"],
+                            [(k, v.get("path") or "", v.get("status") or 200,
+                              v.get("note") or "") for k, v in sorted(odd.items())]),
+                  ""]
         for key, title, unit in (("image", "Illustration", "s_per_image"),
                                  ("speech", "Speech", "rtf"),
                                  ("embed", "Embeddings", "emb_per_s"),
