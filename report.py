@@ -709,6 +709,41 @@ def newest_per_model(runs):
     return [best[m] for m in sorted(best)]
 
 
+def _efficiency_caption(best, worst, picks, meta, speed_rows):
+    """What the per-unit figure means for somebody choosing a model.
+
+    The ratio on its own is a fact about arithmetic. What a reader wants is the
+    consequence: the box has a hundred units, a resident model holds its share
+    of them until it is unloaded, and that is the budget every other thing on
+    the device has to fit into. So the caption spends the budget out loud.
+    """
+    units = {short(r["model"]): (r.get("npu_usage")
+                                 or (meta.get(r["model"]) or {}).get("npu_usage"))
+             for r in picks}
+    speed = {n: v for n, v, _ in speed_rows}
+    bu, wu = units.get(best[0]), units.get(worst[0])
+    bits = [f'<b>{html.escape(best[0])}</b> returns {best[1]:.2f} tok/s for every unit it '
+            f'holds and <b>{html.escape(worst[0])}</b> returns {worst[1]:.2f}, a '
+            f'{best[1] / worst[1]:.1f}x difference in what the same slice of the box buys.']
+    if bu and wu:
+        bits.append(f'In plain terms: {html.escape(best[0])} occupies {bu} of the 100 units '
+                    f'and leaves {100 - bu} for everything else, while '
+                    f'{html.escape(worst[0])} occupies {wu} and leaves {100 - wu}.')
+    # The trap worth naming: fastest is not the same question as cheapest.
+    fastest = speed_rows[0][0] if speed_rows else None
+    if fastest and fastest != best[0]:
+        fs, fu = speed.get(fastest), units.get(fastest)
+        if fs and fu:
+            bits.append(f'The fastest model measured, {html.escape(fastest)} at '
+                        f'{fs:.1f} tok/s, is not the most efficient: it costs {fu} units '
+                        f'to get there, against {bu} for {html.escape(best[0])} at '
+                        f'{speed.get(best[0], 0):.1f} tok/s. If one model is going to sit '
+                        f'resident while the box does other work, that gap is the whole '
+                        f'decision; if the box only ever runs one thing, it does not '
+                        f'matter and the previous chart is the one to read.')
+    return " ".join(bits)
+
+
 def cross_model(runs, cat=None):
     """Every model on one axis, four ways, with one legend for the section."""
     picks = newest_per_model(runs)
@@ -766,11 +801,7 @@ def cross_model(runs, cat=None):
             'of them for as long as it is resident. This is what each one returns for what '
             'it occupies, which is the question that decides what to keep loaded.</p>'
             + hbars(eff, w=880, unit=" tok/s per unit", fmt="{:.2f}", colours=by_short)
-            + caption(f'<b>{html.escape(best[0])}</b> returns {best[1]:.2f} tok/s for every '
-                      f'unit it holds, {best[1]/worst[1]:.1f}x what '
-                      f'{html.escape(worst[0])} returns for the units it holds. A model at '
-                      f'the top of the previous chart and the bottom of this one is fast '
-                      f'and expensive to keep resident.')
+            + caption(_efficiency_caption(best, worst, picks, meta, rows))
             + "</div>")
 
     # 3. prefill curves, all models on one axis

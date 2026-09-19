@@ -102,7 +102,14 @@ class TestComputedCaptions(Fixture):
         # 30 on 30 units is 1.00; 12 on 48 is 0.25; the ratio is 4.0.
         self.assertIn("1.00 tok/s per unit", page)
         self.assertIn("0.25 tok/s per unit", page)
-        self.assertIn("4.0x what", page)
+        self.assertIn("4.0x difference", page)
+
+    def test_the_efficiency_caption_spends_the_budget_out_loud(self):
+        # The ratio on its own is a fact about arithmetic. What decides a
+        # choice is what is left of the box's hundred units afterwards.
+        page = self.html()
+        self.assertIn("occupies 30 of the 100 units and leaves 70", page)
+        self.assertIn("occupies 48 and leaves 52", page)
 
     def test_a_queueing_box_is_named_as_queueing(self):
         # 21 over 20 is 1.05x, which is flat, and the caption has to say so
