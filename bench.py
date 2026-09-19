@@ -21,8 +21,10 @@ import argparse
 import base64
 import errno
 import glob
+import hashlib
 import json
 import pathlib
+import platform
 import re
 import socket
 import statistics
@@ -1119,6 +1121,16 @@ def chat_stats(timings, usage, total_ms, ttft_ms, finish_reason, device, model):
             "model": model}
 
 
+# What the suite sends, and does not send. Named here so a result file can
+# quote it: a default changing between releases would otherwise be invisible
+# in the file and would read as the hardware getting slower.
+SAMPLING = {
+    "temperature": None, "top_p": None, "top_k": None, "seed": None,
+    "note": "none are sent, so the gateway's own defaults for the model apply; "
+            "reasoning is switched with chat_template_kwargs.enable_thinking",
+}
+
+
 def chat(tok, model, prompt, max_tokens, thinking=False):
     body = {"model": model, "max_tokens": max_tokens,
             "chat_template_kwargs": {"enable_thinking": thinking},
@@ -1609,6 +1621,329 @@ def t_embed(tok, model):
             "dim": rows[0]["dim"]}
 
 
+# ====================================================================== #
+#  Provenance                                                            #
+# ====================================================================== #
+# What a number needs carried with it to stay comparable once it leaves this
+# machine. The principle: anything that could change the figure, or that a
+# stranger would need to know before trusting it.
+#
+# A benchmark driven from a Mac over a USB cable and one driven from a Windows
+# box over Wi-Fi are not the same measurement, and until now nothing in the
+# file said which. Neither did anything say what else was resident on the
+# device at the time, which on a box with a hundred NPU units and one
+# accelerator is the single condition that most decides the answer.
+#
+# Two rules hold this together.
+#
+#   Everything is recorded raw and local. The transform that makes a record
+#   safe to publish lives in exactly one function, public_view, so the upload
+#   path and the report cannot disagree about what is safe to show.
+#
+#   A field that could not be read is recorded as null with a reason, never
+#   omitted and never defaulted. A missing key reads as an oversight; a zero
+#   reads as a measurement. "Unavailable, and here is why" reads as neither.
+
+# Bump when the shape changes. A reader in six months needs to know what a
+# file promised, and "no number" means a file written before there was one.
+ENVELOPE_SCHEMA = 1
+
+# Facts this app cannot obtain without starting another program, which it may
+# not do: the farm's archive scanner refuses a tree that can, and that refusal
+# is worth more than these fields.
+_NO_SUBPROCESS = "not readable without starting a program, which this app may not do"
+
+
+def _ram_bytes():
+    """Physical memory, from the C library's own constants where they exist."""
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    except (ValueError, OSError, AttributeError):
+        return None
+
+
+def _machine_model():
+    """(model, reason it is missing). Linux publishes it in a file; macOS and
+    Windows want a program run, so there it stays honestly unknown."""
+    for f in ("/sys/devices/virtual/dmi/id/product_name",
+              "/sys/firmware/devicetree/base/model"):
+        try:
+            text = pathlib.Path(f).read_text(encoding="utf-8", errors="replace").strip("\x00 \n")
+            if text:
+                return text, None
+        except OSError:
+            continue
+    return None, _NO_SUBPROCESS
+
+
+def host_facts():
+    """The machine driving the benchmark, which is half of what it measures."""
+    model, why = _machine_model()
+    out = {
+        "os": platform.system() or None,
+        "os_release": platform.release() or None,
+        "os_version": (platform.mac_ver()[0] or None
+                       if platform.system() == "Darwin" else platform.version() or None),
+        "arch": platform.machine() or None,
+        "machine_model": model,
+        "python": platform.python_version(),
+        "cpu_logical": os.cpu_count(),
+        "ram_bytes": _ram_bytes(),
+    }
+    if why:
+        out["unavailable"] = {"machine_model": why}
+    return out
+
+
+def tool_facts():
+    """This app: what version measured, and which tree it was built from."""
+    commit, dirty = _git_head()
+    return {"bench_version": VERSION, "suite_version": 2,
+            "envelope_schema": ENVELOPE_SCHEMA,
+            "git_commit": commit, "git_dirty": dirty}
+
+
+def _git_head():
+    """(short sha, working tree dirty) read out of .git by hand.
+
+    Reading the files rather than running git, for the same reason as
+    everywhere else here. A packed HEAD and a worktree both resolve; anything
+    else gives up rather than guessing. Dirtiness cannot be known without
+    running git, so it is None rather than False, which would be a claim.
+    """
+    root = pathlib.Path(__file__).resolve().parent
+    git = root / ".git"
+    try:
+        if git.is_file():                      # a worktree points elsewhere
+            git = pathlib.Path(git.read_text(encoding="utf-8").split("gitdir:", 1)[1].strip())
+        head = (git / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref:"):
+            ref = head.split(" ", 1)[1].strip()
+            f = git / ref
+            if f.exists():
+                return f.read_text(encoding="utf-8").strip()[:12], None
+            for line in (git / "packed-refs").read_text(encoding="utf-8").splitlines():
+                if line.endswith(" " + ref):
+                    return line.split(" ", 1)[0][:12], None
+            return None, None
+        return head[:12], None
+    except (OSError, IndexError, ValueError):
+        return None, None
+
+
+def link_rtt_ms(tok, tries=3):
+    """Round trip to the device before any measuring starts.
+
+    Cheap, and it tells a reader whether the link was the bottleneck. The
+    smallest of a few tries, because the smallest is the one least polluted by
+    something else happening at the time.
+    """
+    best = None
+    for _ in range(tries):
+        t0 = time.time()
+        r = api(mgmt("/api/v1/sys/device_info"), tok, timeout=15)
+        if "_error" in r:
+            return None
+        ms = (time.time() - t0) * 1000
+        best = ms if best is None else min(best, ms)
+    return round(best, 1) if best is not None else None
+
+
+def transport_facts(tok):
+    """Which wire, and how far away the box was down it."""
+    out = dict(where())
+    out["rtt_ms"] = link_rtt_ms(tok)
+    return out
+
+
+def device_facts(tok, info=None):
+    """What the box says it is, plus the size of its NPU budget."""
+    info = info if isinstance(info, dict) else api(
+        mgmt("/api/v1/sys/device_info"), tok, timeout=20)
+    if "_error" in info:
+        info = {}
+    free, total = npu_free(tok)
+    return {
+        "name": info.get("device_name") or info.get("name"),
+        "model": info.get("device_model_name") or info.get("model"),
+        # The device spells it "sn" in device_info and "serial" elsewhere.
+        "serial": info.get("sn") or info.get("serial") or DEVICE.get("serial"),
+        "tiiny_os": info.get("tiiny_os"),
+        "service_version": info.get("version"),
+        "npu_units_total": total or None,
+        "ram": info.get("ram"),
+        "storage": info.get("storage"),
+    }
+
+
+def conditions(tok, cat=None):
+    """What else the box was doing when the measurement started.
+
+    This is the part nobody records and the part that decides everything. One
+    accelerator serving one sequence at a time means a model that shared the
+    box with something else was not measured on the same box as one that did
+    not, and without the resident set at the moment the test began there is no
+    way to tell the two apart afterwards.
+    """
+    cat = cat or {}
+    live = running(tok)
+    free, total = npu_free(tok)
+    resident = [{"model": m, "npu_usage": (cat.get(m) or {}).get("npu_usage")}
+                for m in live]
+    tel = telemetry(tok)
+    return {
+        "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "resident": resident,
+        "npu_units_used": sum(r["npu_usage"] or 0 for r in resident) or None,
+        "npu_units_free": free if total else None,
+        "npu_util_pct": tel.get("npu_util_pct"),
+        "npu_mem_used_mb": tel.get("npu_mem_used_mb"),
+        "cpu_total_pct": tel.get("cpu_total_pct"),
+        "device_lock_held_by": _lock_holder(),
+        # Recorded as unavailable rather than left out: a later reader has to
+        # be able to tell "nobody measured this" from "it measured zero".
+        "temperature_c": None,
+        "power_w": None,
+        "unavailable": {
+            "temperature_c": "the device's status API returns null for it",
+            "power_w": "the device's status API returns null for it",
+        },
+    }
+
+
+# The advisory lock Turnstile takes around a whole sectioned job on this box.
+# A run that waited behind another app is not a clean run, and nothing in a
+# result file would have shown it.
+LOCK_PATHS = ("~/.turnstile/tiiny.lock", "~/.onelane/tiiny.lock")
+
+
+def _lock_holder():
+    """Who held the device lock when this started, or None if nobody did.
+
+    The lock file carries the holder's own description. It is read rather than
+    taken: this is a record of the conditions, not a claim on the device, and
+    a benchmark that fought for the lock would change the thing it measures.
+    """
+    for spec in LOCK_PATHS:
+        p = pathlib.Path(os.path.expanduser(spec))
+        try:
+            if not p.exists():
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace").strip()
+            if not text:
+                continue
+            try:
+                blob = json.loads(text)
+                return blob.get("owner") or blob.get("holder") or blob.get("app") or text[:120]
+            except ValueError:
+                return text[:120]
+        except OSError:
+            continue
+    return None
+
+
+def envelope(tok, cat=None, info=None):
+    """Everything that makes a number comparable, in one block."""
+    return {
+        "schema": ENVELOPE_SCHEMA,
+        "tool": tool_facts(),
+        "host": host_facts(),
+        "transport": transport_facts(tok),
+        "device": device_facts(tok, info),
+        "conditions": conditions(tok, cat),
+    }
+
+
+# ------------------------------------------------------------ publishing
+# One function, so the upload path and the report cannot disagree about what is
+# safe to show. Everything above is recorded raw and stays on this machine.
+
+def hash_serial(serial):
+    """A stable, non-reversible handle for a device.
+
+    Published runs have to be groupable by box without naming the box. A plain
+    sha256 of a serial is reversible by anyone who can enumerate the format, so
+    it is salted with a fixed string: this does not have to resist an attacker
+    with the salt, it has to stop a serial being read straight out of a
+    published file.
+    """
+    if not serial:
+        return None
+    return "tiiny-" + hashlib.sha256(
+        ("tiinybench/v1/" + str(serial)).encode("utf-8")).hexdigest()[:16]
+
+
+# The fields that identify a network or a person rather than a measurement,
+# named by where they sit and not by what they are called. A blanket rule on
+# the name "host" dropped the block describing the machine that drove the
+# benchmark, which is a measurement fact and has to survive: one key, two
+# meanings, and the blunt version threw away the wrong one.
+DROP_PATHS = frozenset({
+    ("host",),                              # the device's address
+    ("provenance", "transport", "host"),
+    ("provenance", "transport", "gateway_vhost"),
+    ("provenance", "transport", "candidates"),
+    ("provenance", "transport", "config"),
+    ("provenance", "device", "name"),       # somebody's name for their box
+    ("connection", "host"),                 # the pre-envelope spelling
+    ("connection", "gateway_vhost"),
+    ("connection", "config"),
+    ("connection", "candidates"),
+})
+
+# Wherever one of these appears, at any depth, because a serial is a serial.
+HASH_KEYS = frozenset({"serial", "sn"})
+
+
+def public_view(record, account=None):
+    """The shareable form of a result record. The only one.
+
+    What it does, and why each:
+
+      a serial becomes a salted hash wherever it appears, so runs can be
+      grouped by box without naming one; the device's address, its vhost name
+      and somebody's chosen name for it are dropped, because they identify a
+      network rather than a measurement; any string that looks like a path
+      under a home directory is dropped, since a path carries a username; and
+      an account attribution is added when one is given, so a published run
+      has an owner by choice rather than by leak.
+
+    Nothing else changes. Every measured number survives untouched, which is
+    the point: this makes a record publishable, not smaller. It works on a
+    record with no envelope at all, because files written before there was one
+    still have to be publishable.
+    """
+    def clean(node, path=()):
+        if isinstance(node, dict):
+            out = {}
+            for k, v in node.items():
+                here = path + (k,)
+                if here in DROP_PATHS:
+                    continue
+                if k in HASH_KEYS:
+                    out["device_hash"] = hash_serial(v)
+                    continue
+                out[k] = clean(v, here)
+            return out
+        if isinstance(node, list):
+            return [clean(v, path) for v in node]
+        if isinstance(node, str) and _looks_like_a_home_path(node):
+            return None
+        return node
+
+    out = clean(json.loads(json.dumps(record)))
+    out["published"] = {"account": account, "envelope_schema": ENVELOPE_SCHEMA,
+                        "transform": "public_view/1"}
+    return out
+
+
+_HOME_RE = re.compile(r"(^|[\s\"'])(~/|/home/|/Users/|[A-Za-z]:\\\\Users\\\\)")
+
+
+def _looks_like_a_home_path(text):
+    return bool(_HOME_RE.search(text))
+
+
 # ---------------------------------------------------------------- fixtures
 # Four classes of model need something to chew on that is not text. All of it
 # is built here rather than committed, so the repository stays readable and
@@ -1964,9 +2299,14 @@ LOWER_IS_BETTER = {"s_per_image", "s_per_page"}
 CHAT_TYPES = set(SUITES)
 
 
-def suite(tok, model, want, meta):
+def suite(tok, model, want, meta, cat=None):
     """One model, all the requested tests, returned as a record."""
     tel = telemetry(tok)
+    # The resident set at the moment THIS model's tests begin, not at the
+    # moment the sweep began. A sweep loads and unloads as it goes, so the
+    # conditions the fifth model met are not the ones the first met, and a
+    # single envelope at the top of the file would quietly claim otherwise.
+    began = conditions(tok, cat)
     say(f"\n  ---- {model} " + "-" * max(0, 56 - len(model)))
     results = {}
     t0 = time.time()
@@ -1988,8 +2328,16 @@ def suite(tok, model, want, meta):
         "type": meta.get("type"),
         "npu_usage": meta.get("npu_usage"),
         "total_size": meta.get("total_size"),
+        "context_window": meta.get("context_window"),
         "elapsed_s": round(time.time() - t0, 1),
         "npu_mem_total_mb": tel.get("npu_mem_total_mb"),
+        "conditions_at_start": began,
+        # What was actually sent, rather than what the defaults are today. A
+        # sampling change between releases would otherwise be invisible in a
+        # file and would look like the hardware getting slower.
+        "sampling": SAMPLING,
+        "tests_run": todo,
+        "tests_skipped": skipped,
         "results": results,
     }
 
@@ -2187,9 +2535,18 @@ def main():
 
     info = api(mgmt("/api/v1/sys/device_info"), tok, timeout=20)
     stamp = time.strftime("%Y%m%d-%H%M%S")
+    # Before the record, because the envelope needs it: the resident set is
+    # only worth recording if each model's unit cost comes with it.
+    cat = {m["id"]: m for m in catalog(tok)}
     rec = {"label": a.label, "stamp": stamp, "build": info.get("tiiny_os"),
            "host": HOST, "suite_version": 2,
            "bench_version": VERSION,
+           # Everything that makes these numbers comparable to somebody else's
+           # box six months from now: which machine drove the benchmark, down
+           # which wire, against what firmware, with what else resident at the
+           # moment each test began. Recorded raw and local; public_view is
+           # the one place that makes a record safe to publish.
+           "provenance": envelope(tok, cat, info),
            # Which address, which plane and which transport produced these
            # numbers. Two runs of the same box over USB and over the port 80
            # vhost are not the same measurement, and a result that does not say
@@ -2199,7 +2556,6 @@ def main():
            "models": []}
     path = OUT / f"{stamp}-suite-{a.label}.json"
 
-    cat = {m["id"]: m for m in catalog(tok)}
     was_running = running(tok)
 
     # ---- which models, and are we allowed to touch the box? ----------------
@@ -2242,7 +2598,7 @@ def main():
                 path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                 continue
         try:
-            rec["models"].append(suite(tok, model, want, meta))
+            rec["models"].append(suite(tok, model, want, meta, cat))
         except KeyboardInterrupt:
             print("\n  interrupted; what finished is saved")
             break

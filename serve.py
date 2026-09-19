@@ -156,7 +156,7 @@ def run_suite(label, models, tests):
                     path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
                     continue
             try:
-                rec["models"].append(bench.suite(tok, model, tests, meta))
+                rec["models"].append(bench.suite(tok, model, tests, meta, cat))
             finally:
                 # After every model, always. A sweep is long and a box that
                 # reboots at minute fifty should not cost the whole run.
