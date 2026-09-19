@@ -6,12 +6,23 @@ start and stop, and chat completions streamed and not. Every shape here was
 recorded off live firmware in that file and is reproduced rather than invented,
 because a fake that answers more politely than the hardware is worse than none.
 
+Four more surfaces were added for the transcription, OCR, music and reranking
+tests. Their response shapes come from the device's own documentation; what was
+read off live firmware and is reproduced exactly is the refusal, because that is
+the answer these four give most of the time. A route whose model is not loaded
+answers 503 with {"error": {"message": "No suitable model is currently running.",
+"type": "service_unavailable"}}, which is a different envelope from the
+{"code", "msg"} the model-management routes use, and a benchmark that treats it
+as a transport failure would report a missing model as a broken box.
+
 The two behaviours these tests exist for are both real and both counterintuitive:
 a start that does not fit the NPU budget is accepted with the same 200 as one
 that does and is then rolled back in silence, and reasoning is charged against
 max_tokens before the answer is.
 """
 import json
+import re
+import struct
 import threading
 import time
 import urllib.parse
@@ -39,6 +50,18 @@ CATALOG = [
     {"id": "Qwen/Qwen3-Embedding-0.6B", "type": "Text Embedding",
      "params": "0.6B", "size": 900_000_000, "npu_usage": 1,
      "capabilities": ["embedding"]},
+    {"id": "Qwen/Qwen3-ASR-1.7B", "type": "ASR",
+     "params": "1.7B", "size": 2_100_000_000, "npu_usage": 6,
+     "capabilities": ["asr"]},
+    {"id": "zai-org/GLM-OCR", "type": "Image-to-Text",
+     "params": "2B", "size": 4_300_000_000, "npu_usage": 9,
+     "capabilities": ["ocr"]},
+    {"id": "tencent/SongGeneration-v2-large", "type": "Music Generation",
+     "params": "3B", "size": 9_800_000_000, "npu_usage": 26,
+     "capabilities": ["music"]},
+    {"id": "Qwen/Qwen3-Reranker-0.6B", "type": "Text Reranking",
+     "params": "0.6B", "size": 1_200_000_000, "npu_usage": 2,
+     "capabilities": ["rerank"]},
 ]
 
 # What a model eats and what it produces. The device sends these as two scalar
@@ -48,12 +71,55 @@ IO_BY_TYPE = {
     "image-text-to-text": ("Image, Text", "Text"),
     "text-to-speech": ("Text", "Audio"),
     "text embedding": ("Text", "Vector"),
+    "asr": ("Audio", "Text"),
+    "image-to-text": ("Image", "Text"),
+    "music generation": ("Text", "Audio"),
+    "text reranking": ("Text", "Score"),
 }
 
 DEFAULT_INSTALLED = [row["id"] for row in CATALOG]
 DEFAULT_LOADED = ["deepreinforce-ai/Ornith-1.0-35B",
                   "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
                   "Qwen/Qwen3-Embedding-0.6B"]
+
+# What a route answers when the class of model it needs is not running. Copied
+# from live firmware: the envelope is nothing like the one the management
+# routes use, and telling the two apart is the point of having it here.
+NOT_LOADED = {"error": {"message": "No suitable model is currently running.",
+                        "type": "service_unavailable"}}
+
+# Rates the four added services pretend to run at, so a real-time factor and a
+# pairs-per-second come out of the fake as numbers rather than as zero.
+ASR_SPEED = 20.0       # seconds of audio chewed per second of wall clock
+MUSIC_SPEED = 4.0      # seconds of audio produced per second of wall clock
+OCR_PAGE_S = 0.05      # per page
+RERANK_PAIRS_S = 400.0
+
+# What the fake transcriber and the fake OCR say. Fixed strings: these tests
+# measure rate, and the only thing the text has to do is be there.
+TRANSCRIPT = "the quick brown fox jumps over the lazy dog"
+OCR_TEXT = "20260919"
+
+
+def wav_bytes(seconds, rate=16000):
+    """A silent 16-bit mono WAV of an exact length, for the routes that
+    return audio. Silence, because nothing here listens to it, and an exact
+    length, because the real-time factor is read straight off the header."""
+    n = int(seconds * rate)
+    data = b"\x00\x00" * n
+    return (b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVE"
+            + b"fmt " + struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16)
+            + b"data" + struct.pack("<I", len(data)) + data)
+
+
+def wav_seconds(raw):
+    """Duration off a RIFF header, so an upload's length can be checked."""
+    try:
+        rate = int.from_bytes(raw[24:28], "little")
+        size = int.from_bytes(raw[40:44], "little")
+        return size / (rate * 2) if rate else None
+    except Exception:  # noqa: BLE001
+        return None
 
 # Where this fake stops of its own accord, standing in for a model reaching the
 # end of what it had to say. Asking for more than this gets a "stop"; asking for
@@ -96,6 +162,19 @@ class FakeState:
         # go away on its own, which is the case the Models page has to be
         # honest about.
         self.online_fails = None
+        # The OCR gateway route answers when this is on. Turning it off is how
+        # the other half of the OCR test gets exercised: a box whose OCR model
+        # is a vision language model has no gateway route and must be read
+        # through chat completions instead.
+        self.ocr_gateway = True
+        # Music generation either blocks and hands back a file or hands back a
+        # session to poll. Both are real shapes on this device, so both are here.
+        self.music_async = False
+        self.music_sessions = {}
+        # What the added routes actually received, so a test can prove the
+        # client sent real work rather than a well-formed empty request.
+        self.transcribed = []
+        self.ocr_pages = 0
 
     def row(self, model_id):
         for row in CATALOG:
@@ -271,6 +350,24 @@ class FakeHandler(BaseHTTPRequestHandler):
         if path == "/v1/models":
             return self._send(200, {"object": "list", "data": [
                 {"id": m, "object": "model"} for m in state.loaded]})
+        if path == "/v1/music/progress":
+            if not self._have("Music Generation"):
+                return self._send(503, NOT_LOADED)
+            sid = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query).get("session_id", [""])[0]
+            job = state.music_sessions.get(sid)
+            if not job:
+                return self._send(404, {"code": 404, "msg": "Not Found"})
+            done = time.time() >= job["ready_at"]
+            return self._send(200, {"session_id": sid,
+                                    "status": "done" if done else "running",
+                                    "progress": 100 if done else 40})
+        if path.startswith("/v1/music/sessions/") and path.endswith("/download"):
+            sid = path[len("/v1/music/sessions/"):-len("/download")]
+            job = state.music_sessions.get(sid)
+            if not job:
+                return self._send(404, {"code": 404, "msg": "Not Found"})
+            return self._send_bytes(200, "audio/wav", wav_bytes(job["seconds"]))
         return self._send(404, {"code": 404, "msg": "Not Found"})
 
     def do_POST(self):  # noqa: N802
@@ -279,6 +376,14 @@ class FakeHandler(BaseHTTPRequestHandler):
             return None
         if path == "/v1/chat/completions":
             return self._chat(self._body())
+        if path == "/v1/audio/transcriptions":
+            return self._transcribe()
+        if path == "/v1/ocr":
+            return self._ocr(self._body())
+        if path == "/v1/music/generate":
+            return self._music(self._body())
+        if path == "/v1/rerank":
+            return self._rerank(self._body())
         prefix = "/api/v1/models/"
         for suffix, handler in (("/start", self._start), ("/stop", self._stop)):
             if path.startswith(prefix) and path.endswith(suffix):
@@ -287,6 +392,104 @@ class FakeHandler(BaseHTTPRequestHandler):
                     return self._send(404, {"code": 404, "msg": "Not Found"})
                 return handler(model_id)
         return self._send(404, {"code": 404, "msg": "Not Found"})
+
+    # ------------------------------------------- transcription, OCR, music, rerank
+    def _have(self, kind):
+        """Is a model of this class running? Every one of these routes asks."""
+        return any(self.state.row(m)["type"] == kind for m in self.state.loaded
+                   if m not in self.state.pending)
+
+    def _send_bytes(self, status, ctype, blob):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(blob)))
+        self.end_headers()
+        self.wfile.write(blob)
+
+    def _raw_body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        return self.rfile.read(n) if n else b""
+
+    def _transcribe(self):
+        """Multipart in, {"text": ...} out, after a pause the length of the job.
+
+        The upload is parsed rather than ignored, because the one thing this has
+        to prove is that the client encoded a real file into a real multipart
+        body: an encoder that drops the audio would still get a transcript back
+        from a fake that only reads the model field.
+        """
+        raw = self._raw_body()
+        if not self._have("ASR"):
+            return self._send(503, NOT_LOADED)
+        ctype = self.headers.get("Content-Type") or ""
+        m = re.search(r"boundary=([^\s;]+)", ctype)
+        if not m:
+            return self._send(400, {"error": {"message": "no multipart boundary",
+                                              "type": "invalid_request_error"}})
+        parts = raw.split(b"--" + m.group(1).encode())
+        audio = None
+        for part in parts:
+            head, _, body = part.partition(b"\r\n\r\n")
+            if b'name="file"' in head:
+                audio = body.rstrip(b"\r\n")
+        if not audio or audio[:4] != b"RIFF":
+            return self._send(400, {"error": {"message": "no audio file in the form",
+                                              "type": "invalid_request_error"}})
+        secs = wav_seconds(audio) or 0.0
+        time.sleep(min(secs / ASR_SPEED, 1.0))
+        self.state.transcribed.append(round(secs, 3))
+        return self._send(200, {"text": TRANSCRIPT})
+
+    def _ocr(self, body):
+        """The gateway route, when the box has one. Shape is the upstream's.
+
+        Real OCR servers behind this route do not agree on a response shape, so
+        the one here is deliberately nested and oddly named: anything that only
+        works against a flat {"text": ...} is not ready for the device.
+        """
+        if not self.state.ocr_gateway:
+            return self._send(404, {"code": 404, "msg": "Not Found"})
+        if not self._have("Image-to-Text"):
+            return self._send(503, NOT_LOADED)
+        if not (body.get("image") or "").startswith("iVBOR"):
+            return self._send(400, {"error": {"message": "image must be base64 PNG",
+                                              "type": "invalid_request_error"}})
+        time.sleep(OCR_PAGE_S)
+        self.state.ocr_pages += 1
+        return self._send(200, {"result": {"ocrResults": [
+            {"prunedResult": {"rec_texts": [OCR_TEXT], "rec_scores": [0.98]}}]}})
+
+    def _music(self, body):
+        if not self._have("Music Generation"):
+            return self._send(503, NOT_LOADED)
+        secs = float(body.get("duration") or 8)
+        if self.state.music_async:
+            sid = "sess-%d" % (len(self.state.music_sessions) + 1)
+            self.state.music_sessions[sid] = {
+                "seconds": secs, "ready_at": time.time() + secs / MUSIC_SPEED}
+            return self._send(200, {"session_id": sid, "status": "running"})
+        time.sleep(min(secs / MUSIC_SPEED, 1.0))
+        return self._send_bytes(200, "audio/wav", wav_bytes(secs))
+
+    def _rerank(self, body):
+        if not self._have("Text Reranking"):
+            return self._send(503, NOT_LOADED)
+        docs = body.get("documents") or []
+        if not docs or not (body.get("query") or "").strip():
+            return self._send(400, {"error": {"message": "query and documents are required",
+                                              "type": "invalid_request_error"}})
+        time.sleep(len(docs) / RERANK_PAIRS_S)
+        # Score by how many of the query's words a passage contains, which is
+        # crude and is enough to put the passage that answers it in front.
+        words = {w for w in re.findall(r"[a-z]+", body["query"].lower()) if len(w) > 3}
+        scored = []
+        for i, d in enumerate(docs):
+            have = {w for w in re.findall(r"[a-z]+", str(d).lower())}
+            scored.append({"index": i,
+                           "relevance_score": round(len(words & have) / max(1, len(words)), 4)})
+        scored.sort(key=lambda r: (-r["relevance_score"], r["index"]))
+        top = int(body.get("top_n") or len(scored))
+        return self._send(200, {"results": scored[:top]})
 
     # ----------------------------------------------------------- lifecycle
     def _start(self, model_id):
@@ -328,9 +531,35 @@ class FakeHandler(BaseHTTPRequestHandler):
             return self._send(404, {"error": {
                 "code": 404, "message": '"%s" is not loaded.' % model_id,
                 "type": "model_not_found"}})
+        if self.sent_an_image(body):
+            # A vision language model handed a picture answers about the
+            # picture. This is the other half of the OCR path: boxes whose OCR
+            # model is a VLM have no gateway route and are read through here.
+            self.state.ocr_pages += 1
+            time.sleep(OCR_PAGE_S)
+            return self._send(200, {
+                "id": "chatcmpl-ocr", "object": "chat.completion",
+                "model": model_id,
+                "choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": OCR_TEXT}}],
+                "usage": {"prompt_tokens": 64, "completion_tokens": 8,
+                          "total_tokens": 72}})
         if body.get("stream"):
             return self._chat_stream(body, model_id)
         return self._chat_once(body, model_id)
+
+    @staticmethod
+    def sent_an_image(body):
+        """Whether any message carries an image part, in the list form the
+        OpenAI content blocks use. A plain string prompt never does."""
+        for message in body.get("messages") or []:
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
+        return False
 
     @staticmethod
     def thinking(body):

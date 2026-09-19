@@ -285,6 +285,14 @@ def fits(models):
     }
 
 
+# (figure, the results block it is found in), for every class whose suite is a
+# single test. The multi-test classes are pulled apart above by hand, because
+# their figures come from different blocks of the same record.
+HEADLINE = sorted({(bench.CLASS_METRIC[c][0], names[0])
+                   for c, names in bench.SUITES.items()
+                   if len(names) == 1 and c in bench.CLASS_METRIC})
+
+
 def leaderboard():
     """Best measured figures per model, grouped by what kind of model it is.
 
@@ -299,11 +307,15 @@ def leaderboard():
         if not m:
             continue
         res = r.get("results") or {}
-        e = best.setdefault(m, {"model": m, "runs": 0, "last": "",
-                                "decode_tok_s": None, "prefill_peak": None,
-                                "agg_peak": None, "reasoning_tax": None,
-                                "ttft_s": None, "s_per_image": None,
-                                "rtf": None, "emb_per_s": None, "dim": None})
+        blank = {"model": m, "runs": 0, "last": "", "decode_tok_s": None,
+                 "prefill_peak": None, "agg_peak": None, "reasoning_tax": None,
+                 "ttft_s": None, "dim": None}
+        # Every headline figure any class is ranked by, so a class added to
+        # bench.SUITES appears here without an edit. The three that were
+        # written out by hand went stale the moment a class was added, which is
+        # how four of the box's nine classes came to rank as blank.
+        blank.update({key: None for key, _, _ in bench.CLASS_METRIC.values()})
+        e = best.setdefault(m, blank)
         e["runs"] += 1
         e["last"] = max(e["last"], r.get("stamp") or "")
 
@@ -324,8 +336,9 @@ def leaderboard():
         th = res.get("thinking") or {}
         if th.get("on") and th.get("off") and th["off"].get("wall_s"):
             e["reasoning_tax"] = round(th["on"]["wall_s"] / th["off"]["wall_s"], 2)
-        for key, src in (("s_per_image", "image"), ("rtf", "speech"),
-                         ("emb_per_s", "embed")):
+        # Which block of a record holds a class's figure: the class's own
+        # single test, read straight off the registry rather than listed again.
+        for key, src in HEADLINE:
             blk = res.get(src) or {}
             if blk.get(key) is not None:
                 cur = e[key]

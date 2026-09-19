@@ -18,6 +18,7 @@ is already running and leaves the box exactly as it found it. `--all` and
 `--model` are the two flags that change that, and they say so before they start.
 """
 import argparse
+import base64
 import errno
 import glob
 import json
@@ -25,6 +26,7 @@ import pathlib
 import re
 import socket
 import statistics
+import struct
 import sys
 import threading
 import time
@@ -32,6 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import os
+import zlib
 
 VERSION = "0.1.4"
 
@@ -793,6 +796,24 @@ SPEECH_TEXTS = [
     "wisdom, it was the age of foolishness, it was the epoch of belief.",
 ]
 
+# A query whose right answer is known, so reranking is measured for speed and
+# checked for sense in the same call. Document 2 is the one that answers it.
+RERANK_QUERY = "How many requests can the NPU serve at the same time?"
+RERANK_DOCS = [
+    "The device draws under twenty watts at the wall while it is idle.",
+    "Model weights are stored on the internal drive and loaded on demand.",
+    "The runtime serves one inference at a time; further callers are queued "
+    "rather than batched, so concurrency does not raise total throughput.",
+    "Wi-Fi and USB both reach the gateway, which listens on port 80.",
+]
+RERANK_ANSWER = 2
+
+# The digits printed on the generated OCR page. Eight of them, because a short
+# run is easy to read back and a wrong digit is obvious.
+OCR_DIGITS = "20260919"
+
+MUSIC_PROMPT = "a slow acoustic guitar figure in a minor key, no vocals"
+
 # Deterministic filler so prompt lengths are repeatable across runs.
 FILLER = ("The quick brown fox jumps over the lazy dog near the riverbank at dawn. "
           "Engineers measured the throughput carefully and recorded every result. ")
@@ -800,10 +821,6 @@ FILLER = ("The quick brown fox jumps over the lazy dog near the riverbank at daw
 # The suite talks to chat completions, so these are the model types it can
 # actually exercise. Everything else on the box is listed but skipped, with the
 # reason shown, rather than silently dropped.
-# Every class the suite has a test for. Anything else is listed and skipped
-# with the reason shown, rather than silently dropped.
-CHAT_TYPES = {"Text Generation", "Image-Text-to-Text", "Text-to-Image",
-              "Text-to-Speech", "Text Embedding"}
 
 
 UUID_RE = re.compile(
@@ -896,21 +913,32 @@ class _StayOnBox(urllib.request.HTTPRedirectHandler):
 OPENER = urllib.request.build_opener(_StayOnBox())
 
 
-def _request(target, tok, body, timeout, method, read):
+def _request(target, tok, body, timeout, method, read, raw=None, ctype=None):
     """One call to one service, over whichever transport reaches it.
 
     The service's own port is tried first. A refused connection, and only a
     refused connection, moves that service onto the port 80 vhost for the rest
     of the run. An HTTP error still tells us the transport was right, so it is
     recorded before the error is handed back.
+
+    raw and ctype are for the one endpoint that does not take JSON: ASR wants a
+    multipart upload. They are threaded through here rather than given their own
+    copy of the walk above, because a second copy is a second thing to keep in
+    step with the transport rules.
     """
     err = None
+    data = raw if raw is not None else (json.dumps(body).encode() if body else None)
+    sent = ctype or ("application/json" if body else None)
     for url, extra, mode in _attempts(target):
         req = urllib.request.Request(
-            url, method=method or ("POST" if body is not None else "GET"),
-            data=json.dumps(body).encode() if body else None,
+            # POST is decided by whether a body was offered, not by whether it
+            # encoded to any bytes: body={} is a real POST with nothing in it,
+            # which is exactly what the model start route is sent.
+            url, method=method or ("POST" if (body is not None or raw is not None)
+                                   else "GET"),
+            data=data,
             headers={"Authorization": f"Bearer {tok}", **extra,
-                     **({"Content-Type": "application/json"} if body else {})})
+                     **({"Content-Type": sent} if sent else {})})
         try:
             with OPENER.open(req, timeout=timeout) as r:
                 _mark(target, mode)
@@ -934,6 +962,34 @@ def api(target, tok, body=None, timeout=900, method=None):
 def api_raw(target, tok, body=None, timeout=300):
     """Same as api() but for endpoints that hand back a file, not JSON."""
     return _request(target, tok, body, timeout, None, read=True)
+
+
+def _multipart(fields, files):
+    """Encode a form the way an OpenAI-shaped upload endpoint expects it.
+
+    fields is {name: str}; files is {name: (filename, content type, bytes)}.
+    Small enough to write out rather than reach for a dependency, and the
+    boundary is fixed because nothing here is adversarial and a fixed one keeps
+    a captured request comparable between runs.
+    """
+    bound = "----tiinybench7f3c9a21"
+    out = bytearray()
+    for name, value in fields.items():
+        out += (f"--{bound}\r\nContent-Disposition: form-data; name=\"{name}\""
+                f"\r\n\r\n{value}\r\n").encode()
+    for name, (filename, ctype, blob) in files.items():
+        out += (f"--{bound}\r\nContent-Disposition: form-data; name=\"{name}\"; "
+                f"filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n").encode()
+        out += blob + b"\r\n"
+    out += f"--{bound}--\r\n".encode()
+    return bytes(out), f"multipart/form-data; boundary={bound}"
+
+
+def api_form(target, tok, fields, files, timeout=300):
+    """POST a multipart form and read JSON back. ASR is the only caller."""
+    raw, ctype = _multipart(fields, files)
+    return _request(target, tok, None, timeout, "POST", read=False,
+                    raw=raw, ctype=ctype)
 
 
 class DeviceError(Exception):
@@ -1145,9 +1201,11 @@ def running_detail(tok):
     return d
 
 
-# What /v1/chat/completions will actually serve. Distinct from CHAT_TYPES above,
-# which is every class the benchmark has a test for and includes image, speech
-# and embedding models. "main" is the device's own word for the chat runtime;
+# What /v1/chat/completions will actually serve. Distinct from CHAT_TYPES, which
+# is every class the benchmark has a test for and covers the image, speech,
+# embedding, transcription, OCR, music and reranking models as well, none of
+# which answer a chat completion. "main" is the device's own word for the chat
+# runtime;
 # an older catalogue row carries no capabilities at all, so the type is the
 # fallback rather than a refusal.
 CHAT_CAPABILITY = "main"
@@ -1551,17 +1609,339 @@ def t_embed(tok, model):
             "dim": rows[0]["dim"]}
 
 
+# ---------------------------------------------------------------- fixtures
+# Four classes of model need something to chew on that is not text. All of it
+# is built here rather than committed, so the repository stays readable and
+# every run gets byte-identical input: a fixture you cannot diff is a fixture
+# you cannot trust when a number moves.
+
+def _wav_bytes(seconds, rate=16000):
+    """A tone gated on and off four times a second, as a 16-bit mono WAV.
+
+    It is not speech and will not transcribe to anything, which is the point:
+    what this measures is how fast the model chews through a known duration of
+    audio, and the duration is exact because this wrote the header.
+    """
+    n = int(seconds * rate)
+    period = max(2, rate // 220)
+    frames = bytearray()
+    for i in range(n):
+        on = int(i * 4 / rate) % 2 == 0
+        v = (9000 if (i % period) < period / 2 else -9000) if on else 0
+        frames += struct.pack("<h", v)
+    data = bytes(frames)
+    return (b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVE"
+            + b"fmt " + struct.pack("<IHHIIHH", 16, 1, 1, rate, rate * 2, 2, 16)
+            + b"data" + struct.pack("<I", len(data)) + data)
+
+
+# Seven segments in a 6 by 11 cell. The bars meet at the corners rather than
+# stopping short, because a digit drawn with gaps at the corners reads as a pile
+# of bars and this page has to be legible to a model that was trained on print.
+_SEG_BOX = {"a": (0, 0, 5, 0), "b": (5, 0, 5, 5), "c": (5, 5, 5, 10),
+            "d": (0, 10, 5, 10), "e": (0, 5, 0, 10), "f": (0, 0, 0, 5),
+            "g": (0, 5, 5, 5)}
+_SEG_ON = {"0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg", "4": "bcfg",
+           "5": "acdfg", "6": "acdefg", "7": "abc", "8": "abcdefg", "9": "abcdfg"}
+
+
+def _png_grey(width, height, rows):
+    """Eight-bit greyscale PNG. zlib and struct are the whole toolkit."""
+    raw = b"".join(b"\x00" + bytes(r) for r in rows)
+
+    def chunk(tag, data):
+        body = tag + data
+        return (struct.pack(">I", len(data)) + body
+                + struct.pack(">I", zlib.crc32(body)))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9))
+            + chunk(b"IEND", b""))
+
+
+def _digits_png(text=OCR_DIGITS, scale=10, margin=30):
+    """A white page with black seven-segment digits on it.
+
+    Seven segments rather than a font table: a font is three hundred lines of
+    glyph data nobody can check by eye, and digits are enough to tell whether
+    the page was read.
+    """
+    cell_w, cell_h, gap = 6, 11, 3
+    grid = [[0] * (len(text) * (cell_w + gap)) for _ in range(cell_h)]
+    for i, ch in enumerate(text):
+        ox = i * (cell_w + gap)
+        for seg in _SEG_ON.get(ch, ""):
+            x0, y0, x1, y1 = _SEG_BOX[seg]
+            for y in range(y0, y1 + 1):
+                for x in range(x0, x1 + 1):
+                    grid[y][ox + x] = 1
+    w = len(grid[0]) * scale + margin * 2
+    h = cell_h * scale + margin * 2
+    rows = [[255] * w for _ in range(h)]
+    for y, row in enumerate(grid):
+        for x, on in enumerate(row):
+            if not on:
+                continue
+            for dy in range(scale):
+                line = rows[margin + y * scale + dy]
+                for dx in range(scale):
+                    line[margin + x * scale + dx] = 0
+    return _png_grey(w, h, rows), w, h
+
+
+def _digit_run(text):
+    """The longest run of digits in whatever the model said."""
+    best = ""
+    for run in re.findall(r"\d+", text or ""):
+        if len(run) > len(best):
+            best = run
+    return best
+
+
+# ------------------------------------------------------------------- tests
+
+def t_asr(tok, model):
+    """Real-time factor: seconds of audio transcribed per second of wall clock.
+
+    The same figure speech is judged by, the other way round. Above 1.0 means
+    the box can keep up with someone talking, which is the threshold that
+    decides whether transcription can be live or only after the fact.
+
+    Accuracy is deliberately not scored. Scoring it needs a clip of known
+    speech, and there is no way to generate one here without a text-to-speech
+    model loaded, which would make an ASR benchmark depend on a second model.
+    What each run does record is the text that came back, so a model returning
+    nothing at all is visible rather than hidden behind a good rate.
+    """
+    say("\n  SPEECH RECOGNITION  (real-time factor)")
+    rows = []
+    for secs in (2.0, 5.0, 10.0):
+        clip = _wav_bytes(secs)
+        t0 = time.time()
+        r = api_form(gw("/v1/audio/transcriptions"), tok,
+                     {"model": model, "response_format": "json"},
+                     {"file": ("clip.wav", "audio/wav", clip)}, timeout=300)
+        wall = time.time() - t0
+        if "_error" in r:
+            say(f"    {secs:>5.1f}s clip FAILED {r['_error'][:55]}"); continue
+        text = (r.get("text") or "").strip()
+        rtf = round(secs / wall, 2) if wall else None
+        rows.append({"audio_s": secs, "wall_s": round(wall, 2), "rtf": rtf,
+                     "chars": len(text), "text": text[:200]})
+        say(f"    {secs:>5.1f}s clip  {wall:6.2f}s  {rtf}x real time  "
+            f"{len(text):>4} chars back")
+    if not rows:
+        return None
+    good = [r["rtf"] for r in rows if r.get("rtf")]
+    if good:
+        say(f"    median {statistics.median(good):.2f}x real time")
+    return {"runs": rows,
+            "rtf": round(statistics.median(good), 2) if good else None,
+            "returned_text": any(r["chars"] for r in rows)}
+
+
+def t_ocr(tok, model):
+    """Seconds per page, and whether the digits on the page came back.
+
+    Two kinds of model wear this class on the box: a vision language model that
+    will read the page through chat completions, and a dedicated OCR server
+    behind the gateway's own /v1/ocr route. The gateway is tried first and chat
+    second, and whichever answered is recorded, because "two seconds a page" is
+    not comparable between the two paths and the record has to say which it was.
+    """
+    say("\n  OCR  (seconds per page)")
+    page, w, h = _digits_png()
+    b64 = base64.b64encode(page).decode()
+    rows, via = [], None
+    for i in range(3):
+        t0 = time.time()
+        text, how = None, None
+        r = api(gw("/v1/ocr"), tok,
+                {"model": model, "image": b64}, timeout=300)
+        if "_error" not in r:
+            text, how = _ocr_text(r), "ocr gateway"
+        else:
+            c = api(gw("/v1/chat/completions"), tok, {
+                "model": model, "max_tokens": 64, "messages": [{"role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {
+                            "url": "data:image/png;base64," + b64}},
+                        {"type": "text",
+                         "text": "Read the digits on this page. Reply with the "
+                                 "digits only."}]}]}, timeout=300)
+            if "_error" not in c:
+                text = (((c.get("choices") or [{}])[0].get("message") or {})
+                        .get("content") or "")
+                how = "chat completions"
+        wall = time.time() - t0
+        if text is None:
+            say(f"    page {i+1} FAILED {str(r.get('_error'))[:55]}"); continue
+        via = via or how
+        got = _digit_run(text)
+        rows.append({"wall_s": round(wall, 2), "via": how, "read": got,
+                     "correct": got == OCR_DIGITS})
+        say(f"    page {i+1}  {wall:6.2f}s  via {how:<16} read {got or '(nothing)'}"
+            + ("  correct" if got == OCR_DIGITS else ""))
+    if not rows:
+        return None
+    med = statistics.median(r["wall_s"] for r in rows)
+    hit = sum(1 for r in rows if r["correct"])
+    say(f"    median {med:.2f}s per page, {hit} of {len(rows)} read correctly")
+    return {"runs": rows, "s_per_page": round(med, 2), "via": via,
+            "expected": OCR_DIGITS, "correct": hit,
+            "page_px": [w, h]}
+
+
+def _ocr_text(payload):
+    """Pull the text out of whatever shape the OCR upstream returned.
+
+    The /v1/ocr route is a gateway in front of whichever OCR server the model
+    ships, and those do not agree on a response shape. Rather than guess one,
+    this walks the payload and takes every string it finds, which is enough to
+    answer the only question asked of it: did the digits come back.
+    """
+    found = []
+
+    def walk(node):
+        if isinstance(node, str):
+            found.append(node)
+        elif isinstance(node, dict):
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(payload)
+    return " ".join(found)
+
+
+def t_music(tok, model):
+    """Seconds of audio produced per second of wall clock.
+
+    The music service is the one subsystem on this box that may answer either
+    way: some of its routes hand back a file, and the presence of /progress and
+    /sessions endpoints says others hand back a job to poll. Both are handled
+    and the record says which happened, because a number from a blocking call
+    and a number from a polled job are not the same measurement.
+    """
+    say("\n  MUSIC  (seconds of audio per second of wall clock)")
+    rows = []
+    for want in (8, 16):
+        t0 = time.time()
+        body = {"model": model, "prompt": MUSIC_PROMPT,
+                "duration": want, "format": "wav"}
+        raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
+        audio, how = None, None
+        if isinstance(raw, (bytes, bytearray)) and raw[:4] == b"RIFF":
+            audio, how = bytes(raw), "direct"
+        else:
+            job = raw
+            if isinstance(raw, (bytes, bytearray)):
+                try:
+                    job = json.loads(raw.decode("utf-8", "replace"))
+                except ValueError:
+                    job = {}
+            sid = (job or {}).get("session_id") or (job or {}).get("id")
+            if sid:
+                audio, how = _music_wait(tok, sid), "session"
+        wall = time.time() - t0
+        if not audio:
+            say(f"    {want:>3}s FAILED {str(raw)[:60]}"); continue
+        secs = _wav_seconds(audio)
+        ratio = round(secs / wall, 2) if secs and wall else None
+        rows.append({"asked_s": want, "audio_s": round(secs, 2) if secs else None,
+                     "wall_s": round(wall, 2), "audio_per_s": ratio, "via": how})
+        say(f"    {want:>3}s asked  {wall:7.2f}s  "
+            + (f"{secs:5.1f}s audio  {ratio}x" if secs else "(duration unknown)")
+            + f"  via {how}")
+    if not rows:
+        return None
+    good = [r["audio_per_s"] for r in rows if r.get("audio_per_s")]
+    if good:
+        say(f"    median {statistics.median(good):.2f}s of audio per second")
+    return {"runs": rows,
+            "audio_per_s": round(statistics.median(good), 2) if good else None,
+            "via": rows[0]["via"]}
+
+
+def _music_wait(tok, session, limit=900):
+    """Poll a music job until it has something to download, or time runs out."""
+    deadline = time.time() + limit
+    while time.time() < deadline:
+        p = api(gw(f"/v1/music/progress?session_id={session}"), tok, timeout=60)
+        state = str((p or {}).get("status") or (p or {}).get("state") or "").lower()
+        if state in ("failed", "error"):
+            return None
+        if state in ("done", "finished", "completed", "success") or \
+                (p or {}).get("progress") == 100:
+            break
+        time.sleep(2)
+    blob = api_raw(gw(f"/v1/music/sessions/{session}/download"), tok, timeout=300)
+    return bytes(blob) if isinstance(blob, (bytes, bytearray)) and blob[:4] == b"RIFF" else None
+
+
+def t_rerank(tok, model):
+    """Query-document pairs scored per second, and whether the right one wins.
+
+    Throughput is the headline, because reranking is something you do to a
+    whole result set at once and what matters is how big a set fits inside a
+    search that still feels instant. The sense check costs nothing and is worth
+    having: one of the four passages actually answers the query, so a model
+    that is fast and ranks it below the others has told you something.
+    """
+    say("\n  RERANKING  (pairs per second)")
+    rows, top1 = [], None
+    for n in (4, 16, 64):
+        # The four real passages, repeated to reach the batch size, with the
+        # answer kept at a known index so the check still means something.
+        docs = [RERANK_DOCS[i % len(RERANK_DOCS)] for i in range(n)]
+        t0 = time.time()
+        r = api(gw("/v1/rerank"), tok,
+                {"model": model, "query": RERANK_QUERY, "documents": docs,
+                 "top_n": len(docs)}, timeout=300)
+        wall = time.time() - t0
+        if "_error" in r:
+            say(f"    {n:>3} docs FAILED {r['_error'][:55]}"); continue
+        ranked = r.get("results") or r.get("data") or []
+        rate = round(len(docs) / wall, 1) if wall else 0
+        if top1 is None and ranked:
+            first = ranked[0]
+            idx = first.get("index") if isinstance(first, dict) else None
+            top1 = (idx % len(RERANK_DOCS)) == RERANK_ANSWER if isinstance(idx, int) else None
+        rows.append({"docs": n, "wall_s": round(wall, 3),
+                     "returned": len(ranked), "pairs_per_s": rate})
+        say(f"    {n:>3} docs  {wall:6.3f}s  {rate:8.1f} pairs/s  "
+            f"{len(ranked)} scored")
+    if not rows:
+        return None
+    say(f"    best {max(r['pairs_per_s'] for r in rows):.1f} pairs/s"
+        + ("" if top1 is None else
+           ("; the passage that answers the query ranked first" if top1
+            else "; the passage that answers the query did NOT rank first")))
+    return {"runs": rows, "pairs_per_s": max(r["pairs_per_s"] for r in rows),
+            "top1_correct": top1}
+
+
 TESTS = {"prefill": t_prefill, "sustained": t_sustained,
          "concurrency": t_concurrency, "thinking": t_thinking,
-         "image": t_image, "speech": t_speech, "embed": t_embed}
+         "image": t_image, "speech": t_speech, "embed": t_embed,
+         "asr": t_asr, "ocr": t_ocr, "music": t_music, "rerank": t_rerank}
 
-# Which tests mean anything for which kind of model.
+# Which tests mean anything for which kind of model. The keys are the device's
+# own type strings, exactly as the model store spells them, because that is what
+# a record is matched against.
 SUITES = {
     "Text Generation":    ["prefill", "sustained", "concurrency", "thinking"],
     "Image-Text-to-Text": ["prefill", "sustained", "concurrency", "thinking"],
     "Text-to-Image":      ["image"],
     "Text-to-Speech":     ["speech"],
     "Text Embedding":     ["embed"],
+    "ASR":                ["asr"],
+    "Image-to-Text":      ["ocr"],
+    "Music Generation":   ["music"],
+    "Text Reranking":     ["rerank"],
 }
 
 # The headline figure per class: (key in results, unit, what it means).
@@ -1571,8 +1951,17 @@ CLASS_METRIC = {
     "Text-to-Image":      ("s_per_image", "s/img", "per 512 plate"),
     "Text-to-Speech":     ("rtf", "x", "faster than real time"),
     "Text Embedding":     ("emb_per_s", "emb/s", "embeddings per second"),
+    "ASR":                ("rtf", "x", "faster than real time"),
+    "Image-to-Text":      ("s_per_page", "s/page", "per generated page"),
+    "Music Generation":   ("audio_per_s", "x", "audio per second of wall clock"),
+    "Text Reranking":     ("pairs_per_s", "pairs/s", "query-document pairs"),
 }
-LOWER_IS_BETTER = {"s_per_image"}
+LOWER_IS_BETTER = {"s_per_image", "s_per_page"}
+
+# Every class the suite has a test for, which is SUITES read the other way.
+# It used to be a second hand-written set and the two drifted the moment a class
+# was added, so now there is one list and this is a view of it.
+CHAT_TYPES = set(SUITES)
 
 
 def suite(tok, model, want, meta):
