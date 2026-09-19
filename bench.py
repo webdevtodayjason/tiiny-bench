@@ -2408,8 +2408,13 @@ def t_music(tok, model):
         body = {"model": model, "prompt": MUSIC_PROMPT,
                 "duration": want, "format": "wav"}
         raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
-        drop = _rejected_field(raw)
-        if drop and drop in body:
+        # It objects to one field at a time: duration first, then format. So
+        # keep dropping whatever it names until it stops naming things, with
+        # a bound so a device that refuses everything cannot spin here.
+        for _ in range(4):
+            drop = _rejected_field(raw)
+            if not drop or drop not in body:
+                break
             say(f"    this model will not take {drop}; asking again without it")
             body.pop(drop)
             t0 = time.time()

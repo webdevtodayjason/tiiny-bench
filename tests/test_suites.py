@@ -724,3 +724,25 @@ class TestEmbeddings(DeviceCase):
         self.state.loaded = set()
         out = bench.t_embed(bench.key(), EMBED)
         self.assertIn("resident", out["not_measured"])
+
+
+class TestMusicFieldsRefusedOneAtATime(DeviceCase):
+    """SongGeneration-v2-large names one unwelcome field per reply. Dropping
+    only the first one left it failing on the second, which is what happened
+    on 2026-09-19: duration went, then it objected to format."""
+    loaded = [MUSIC]
+
+    def test_it_keeps_dropping_until_the_request_is_accepted(self):
+        self.state.music_refuses = ("duration", "format")
+        out = bench.t_music(bench.key(), MUSIC)
+        self.assertEqual(len(out["runs"]), 2)
+        said = " ".join(self.said)
+        self.assertIn("will not take duration", said)
+        self.assertIn("will not take format", said)
+
+    def test_the_dropping_is_bounded(self):
+        """A box that names a new field every time must not be able to hold
+        the benchmark in a loop. Four drops per run, then it gives up."""
+        self.state.music_refuses = ("model", "prompt", "duration", "format")
+        bench.t_music(bench.key(), MUSIC)
+        self.assertLessEqual(self.state.music_calls, 2 * 5)

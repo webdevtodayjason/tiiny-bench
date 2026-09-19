@@ -170,6 +170,8 @@ class FakeState:
         # Music generation either blocks and hands back a file or hands back a
         # session to poll. Both are real shapes on this device, so both are here.
         self.music_async = False
+        self.music_refuses = ()
+        self.music_calls = 0
         # CustomVoice takes the plain body; its two siblings answer 500.
         self.speech_needs_voice = False
         self.speech_speakers = None
@@ -474,8 +476,17 @@ class FakeHandler(BaseHTTPRequestHandler):
             {"prunedResult": {"rec_texts": [OCR_TEXT], "rec_scores": [0.98]}}]}})
 
     def _music(self, body):
+        self.state.music_calls += 1
         if not self._have("Music Generation"):
             return self._send(503, NOT_LOADED)
+        # SongGeneration refuses one unexpected field per reply, naming it,
+        # so a benchmark that drops only the first one never gets through.
+        for field in self.state.music_refuses:
+            if field in body:
+                return self._send(400, {
+                    "success": False, "audio_data": None,
+                    "error": "Extra inputs are not permitted in request: %s" % field,
+                    "error_code": "INVALID_REQUEST"})
         secs = float(body.get("duration") or 8)
         if self.state.music_async:
             sid = "sess-%d" % (len(self.state.music_sessions) + 1)
