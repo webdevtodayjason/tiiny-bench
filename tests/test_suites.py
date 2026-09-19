@@ -43,6 +43,7 @@ OCR = "zai-org/GLM-OCR"
 MUSIC = "tencent/SongGeneration-v2-large"
 RERANK = "Qwen/Qwen3-Reranker-0.6B"
 CHAT = "deepreinforce-ai/Ornith-1.0-35B"
+TTS = "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 
 
 class DeviceCase(unittest.TestCase):
@@ -628,3 +629,31 @@ class QualifiedCaptureKeys(unittest.TestCase):
         kept = {k: v for k, v in caps.items()
                 if k in todo or k.split()[0] in todo}
         self.assertEqual(sorted(kept), ["ocr", "ocr fallback"])
+
+
+# ------------------------------------------------------------------ speech
+class TestSpeechVoiceMode(DeviceCase):
+    """Two of the four text-to-speech models measured nothing in the
+    2026-09-19 sweep: the speech route defaults to a custom-voice mode they do
+    not implement and they answer 500. Story Lantern drives this same route in
+    production and found naming a voice does not help, its siblings reject all
+    35 known speaker names, so the benchmark must not guess at names. It has
+    to say which wall it hit, and a bare null does not."""
+    loaded = [TTS]
+
+    def test_a_model_that_takes_the_plain_body_is_measured(self):
+        out = bench.t_speech(bench.key(), TTS)
+        self.assertEqual(len(out["runs"]), 3)
+        self.assertGreater(out["rtf"], 0)
+
+    def test_a_model_that_refuses_the_mode_says_why_and_is_not_a_bare_null(self):
+        self.state.speech_needs_voice = True
+        out = bench.t_speech(bench.key(), TTS)
+        self.assertIn("custom-voice", out["not_measured"])
+
+    def test_a_refusal_about_something_else_is_not_read_as_a_voice_problem(self):
+        self.assertFalse(bench._voice_mode_refused(
+            {"_status": 500, "_body": '{"error":{"message":"out of memory"}}'}))
+        self.assertTrue(bench._voice_mode_refused(
+            {"_status": 500,
+             "_body": '{"error":{"message":"custom_voice is not supported by this model"}}'}))

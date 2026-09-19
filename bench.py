@@ -1657,6 +1657,23 @@ def _wav_seconds(raw):
     return None
 
 
+# The speech route defaults to a custom-voice mode, and two of the four
+# text-to-speech models on this box do not implement it: they answer 500
+# "custom_voice is not supported by this model". Naming a voice instead does
+# not help. Story Lantern, which drives this route in production, found the
+# CustomVoice variant needs no voice field and its siblings reject all 35
+# known speaker names, and the 2026-09-19 sweep agrees: CustomVoice measured
+# 1.58x real time with the plain body, Base and VoiceDesign measured nothing.
+# So this does not guess at voice names. It says which wall it hit.
+
+def _voice_mode_refused(v):
+    """True when the device is refusing the voice mode, not the text."""
+    if not isinstance(v, dict):
+        return False
+    blob = (str(v.get("_body") or "") + str(v.get("_error") or "")).lower()
+    return "voice" in blob and ("not supported" in blob or "unsupported" in blob)
+
+
 def t_speech(tok, model):
     """Real-time factor: seconds of audio produced per second of wall clock.
     Above 1.0 means it can talk faster than a person listens, which is the only
@@ -1664,10 +1681,16 @@ def t_speech(tok, model):
     say("\n  SPEECH  (real-time factor)")
     rows = []
     for i, text in enumerate(SPEECH_TEXTS):
+        body = {"model": model, "input": text, "response_format": "wav"}
         t0 = time.time()
-        raw = api_raw(gw("/v1/audio/speech"), tok,
-                      {"model": model, "input": text, "response_format": "wav"},
-                      timeout=300)
+        raw = api_raw(gw("/v1/audio/speech"), tok, body, timeout=300)
+        if _voice_mode_refused(raw):
+            capture("speech", gw("/v1/audio/speech"), raw)
+            say("    this model does not implement the voice mode the speech "
+                "route defaults to")
+            return not_measured(
+                "the speech route defaults to a custom-voice mode this model "
+                "does not implement, and it answered 500 rather than audio")
         wall = time.time() - t0
         wav = _as_wav(raw)
         if not wav:

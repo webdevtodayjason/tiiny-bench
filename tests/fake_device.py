@@ -170,6 +170,8 @@ class FakeState:
         # Music generation either blocks and hands back a file or hands back a
         # session to poll. Both are real shapes on this device, so both are here.
         self.music_async = False
+        # CustomVoice takes the plain body; its two siblings answer 500.
+        self.speech_needs_voice = False
         self.music_sessions = {}
         # What the added routes actually received, so a test can prove the
         # client sent real work rather than a well-formed empty request.
@@ -378,6 +380,8 @@ class FakeHandler(BaseHTTPRequestHandler):
             return self._chat(self._body())
         if path == "/v1/audio/transcriptions":
             return self._transcribe()
+        if path == "/v1/audio/speech":
+            return self._speech(self._body())
         if path == "/v1/ocr":
             return self._ocr(self._body())
         if path == "/v1/music/generate":
@@ -470,6 +474,23 @@ class FakeHandler(BaseHTTPRequestHandler):
             return self._send(200, {"session_id": sid, "status": "running"})
         time.sleep(min(secs / MUSIC_SPEED, 1.0))
         return self._send_bytes(200, "audio/wav", wav_bytes(secs))
+
+    def _speech(self, body):
+        """What the real box does: a request with no voice falls through to
+        custom_voice and the model rejects it with a 500, so a benchmark that
+        sends the plain OpenAI body measures nothing at all. Named voices are
+        accepted. SPEECH_SPEED is characters of text per second of audio."""
+        if not self._have("Text-to-Speech"):
+            return self._send(503, NOT_LOADED)
+        if self.state.speech_needs_voice:
+            # The Base and VoiceDesign variants: the route reaches for a
+            # custom voice and the model has no such mode.
+            return self._send(500, {"error": {
+                "message": "custom_voice is not supported by this model",
+                "type": "unsupported_capability"}})
+        text = body.get("input") or ""
+        return self._send_bytes(200, "audio/wav",
+                                wav_bytes(max(0.5, len(text) / 18.0)))
 
     def _rerank(self, body):
         if not self._have("Text Reranking"):

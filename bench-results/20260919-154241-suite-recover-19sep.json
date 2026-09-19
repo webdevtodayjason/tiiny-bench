@@ -1,0 +1,168 @@
+{
+  "label": "recover-19sep",
+  "stamp": "20260919-154241",
+  "build": "0.1.34",
+  "host": "172.17.7.177",
+  "suite_version": 2,
+  "bench_version": "0.1.9",
+  "provenance": {
+    "schema": 1,
+    "tool": {
+      "bench_version": "0.1.9",
+      "suite_version": 2,
+      "envelope_schema": 1,
+      "git_commit": "f8c6b29e526b",
+      "git_dirty": null
+    },
+    "host": {
+      "os": "Darwin",
+      "os_release": "25.6.0",
+      "os_version": "26.6.2",
+      "arch": "arm64",
+      "machine_model": null,
+      "python": "3.14.6",
+      "cpu_logical": 18,
+      "ram_bytes": 137438953472,
+      "unavailable": {
+        "machine_model": "not readable without starting a program, which this app may not do"
+      }
+    },
+    "transport": {
+      "host": "172.17.7.177",
+      "source": "/Users/sem/.tiinyapps/device.json",
+      "plane": "given",
+      "serial": "TNYM26072400300011Q",
+      "gateway_transport": "vhost",
+      "gateway_port": 80,
+      "gateway_vhost": "p8800.api.tiiny",
+      "services": {
+        "gateway": "vhost",
+        "mgmt": "direct"
+      },
+      "rtt_ms": 102.3
+    },
+    "device": {
+      "name": "My Tiiny",
+      "model": "Tiiny z01",
+      "serial": "TNYM26072400300011Q",
+      "tiiny_os": "0.1.34",
+      "service_version": "0.1.30",
+      "npu_units_total": 100,
+      "ram": "80 GB",
+      "storage": "1 TB"
+    },
+    "conditions": {
+      "at": "2026-09-19T15:42:42-0500",
+      "resident": [
+        {
+          "model": "openai/gpt-oss-120b",
+          "npu_usage": 99
+        }
+      ],
+      "npu_units_used": 99,
+      "npu_units_free": 1,
+      "npu_util_pct": 83.53,
+      "npu_mem_used_mb": 8103,
+      "cpu_total_pct": 13.8,
+      "device_lock_held_by": null,
+      "temperature_c": null,
+      "power_w": null,
+      "unavailable": {
+        "temperature_c": "the device's status API returns null for it",
+        "power_w": "the device's status API returns null for it"
+      }
+    }
+  },
+  "connection": {
+    "host": "172.17.7.177",
+    "source": "/Users/sem/.tiinyapps/device.json",
+    "plane": "given",
+    "serial": "TNYM26072400300011Q",
+    "gateway_transport": "vhost",
+    "gateway_port": 80,
+    "gateway_vhost": "p8800.api.tiiny",
+    "services": {
+      "gateway": "vhost",
+      "mgmt": "direct"
+    },
+    "round_trip": {
+      "probe": "/api/v1/models/running",
+      "n": 7,
+      "median_ms": 3.6,
+      "min_ms": 2.7,
+      "max_ms": 8.4
+    }
+  },
+  "firmware": {
+    "tiiny_os": "0.1.34",
+    "version": "0.1.30"
+  },
+  "models": [
+    {
+      "model": "Supertone/supertonic-3",
+      "params": "0.1B",
+      "type": "Text-to-Speech",
+      "npu_usage": 0,
+      "total_size": 1032671056,
+      "context_window": null,
+      "elapsed_s": 0.1,
+      "npu_mem_total_mb": 4460,
+      "conditions_at_start": {
+        "at": "2026-09-19T15:42:55-0500",
+        "resident": [
+          {
+            "model": "Supertone/supertonic-3",
+            "npu_usage": 0
+          }
+        ],
+        "npu_units_used": null,
+        "npu_units_free": 100,
+        "npu_util_pct": 5.67,
+        "npu_mem_used_mb": 532,
+        "cpu_total_pct": 14.1,
+        "device_lock_held_by": null,
+        "temperature_c": null,
+        "power_w": null,
+        "unavailable": {
+          "temperature_c": "the device's status API returns null for it",
+          "power_w": "the device's status API returns null for it"
+        }
+      },
+      "sampling": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "seed": null,
+        "note": "none are sent, so the gateway's own defaults for the model apply; reasoning is switched with chat_template_kwargs.enable_thinking"
+      },
+      "tests_run": [
+        "speech"
+      ],
+      "tests_skipped": [
+        "prefill",
+        "sustained",
+        "concurrency",
+        "thinking",
+        "image",
+        "embed",
+        "asr",
+        "ocr",
+        "music",
+        "rerank"
+      ],
+      "unparsed": {
+        "speech": {
+          "path": "gateway/v1/audio/speech",
+          "status": 500,
+          "content_type": "application/json",
+          "note": "no WAV came back, in any envelope this knows",
+          "body": "{\"_error\": \"HTTP Error 500: Internal Server Error\", \"_status\": 500, \"_body\": \"{\\\"error\\\":{\\\"message\\\":\\\"Unsupported speaker: serena. Supported speakers: ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5']\\\",\\\"type\\\":\\\"INVALID_REQUEST\\\"}}\", \"_ctype\": \"application/json\"}",
+          "truncated": false
+        }
+      },
+      "results": {
+        "speech": null
+      }
+    }
+  ]
+}
