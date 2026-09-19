@@ -755,12 +755,17 @@ class TestMusicAsksForADifferentShape(DeviceCase):
     does want, it should use one."""
     loaded = [MUSIC]
 
-    def test_it_will_not_drop_the_content_of_the_request(self):
+    def test_it_asks_what_to_send_instead_of_deleting_the_request(self):
+        """It refuses the prompt, so the prompt is not simply dropped: one
+        probe without it makes the box name what it does want, and the prompt
+        goes there. What must not happen is the request being emptied out."""
         self.state.music_refuses = ("duration", "format", "prompt")
         self.state.music_wants_config = True
-        bench.t_music(bench.key(), MUSIC)
+        out = bench.t_music(bench.key(), MUSIC)
         said = " ".join(self.said)
-        self.assertIn("which is the request; not dropping it", said)
+        self.assertIn("asking what it wants instead", said)
+        self.assertIn("it asks for config.lyrics", said)
+        self.assertEqual(len(out["runs"]), 2)
 
     def test_it_sends_the_prompt_where_the_box_asks_for_it(self):
         self.state.music_refuses = ("duration", "format")

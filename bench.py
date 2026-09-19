@@ -2465,7 +2465,13 @@ def t_music(tok, model):
             if not drop or drop not in body:
                 break
             if drop in NEVER_DROP:
-                say(f"    it refuses {drop}, which is the request; not dropping it")
+                # It will not take the prompt where every other model takes
+                # it. Ask once, with the field gone, what it wants instead:
+                # the refusal to an empty request names the alternatives.
+                say(f"    it refuses {drop}; asking what it wants instead")
+                probe = dict(body)
+                probe.pop(drop)
+                raw = api_raw(gw("/v1/music/generate"), tok, probe, timeout=900)
                 break
             say(f"    this model will not take {drop}; asking again without it")
             body.pop(drop)
