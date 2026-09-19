@@ -15,6 +15,7 @@ is that the fixtures are generated rather than committed and are byte for byte
 the same every run: a number that moves between runs has to be the device
 moving, not the input.
 """
+import base64
 import json
 import os
 import pathlib
@@ -551,3 +552,39 @@ class TestTheVersionIsOneNumber(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------------------ WAV envelopes
+class WavEnvelope(unittest.TestCase):
+    """The device answers audio in more than one shape. Every shape that has
+    actually been seen has to yield the same bytes, because the sweep of
+    2026-09-19 recorded a working music model as FAILED for want of this."""
+
+    def _wav(self):
+        return bench._silence_wav(1) if hasattr(bench, "_silence_wav") else (
+            b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt "
+            + (16).to_bytes(4, "little") + (1).to_bytes(2, "little")
+            + (1).to_bytes(2, "little") + (16000).to_bytes(4, "little")
+            + (32000).to_bytes(4, "little") + (2).to_bytes(2, "little")
+            + (16).to_bytes(2, "little") + b"data" + (0).to_bytes(4, "little"))
+
+    def test_raw_riff_passes_through(self):
+        w = self._wav()
+        self.assertEqual(bench._as_wav(w), w)
+
+    def test_base64_in_audio_data_envelope(self):
+        """The exact shape RoyalCities/Foundation-1 returned."""
+        w = self._wav()
+        body = json.dumps({"success": True,
+                           "audio_data": base64.b64encode(w).decode()}).encode()
+        self.assertEqual(bench._as_wav(body), w)
+
+    def test_data_uri_prefix_is_stripped(self):
+        w = self._wav()
+        body = {"audio": "data:audio/wav;base64," + base64.b64encode(w).decode()}
+        self.assertEqual(bench._as_wav(body), w)
+
+    def test_non_audio_json_is_not_mistaken_for_a_wav(self):
+        self.assertIsNone(bench._as_wav(b'{"session_id":"sess-1"}'))
+        self.assertIsNone(bench._as_wav({"_error": "HTTP Error 400"}))
+        self.assertIsNone(bench._as_wav(b"not json at all"))

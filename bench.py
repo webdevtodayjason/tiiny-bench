@@ -1554,6 +1554,43 @@ def t_image(tok, model):
     return {"runs": rows, "s_per_image": round(med, 2)}
 
 
+def _as_wav(raw):
+    """A WAV out of whatever shape the device chose to answer in.
+
+    Three shapes have come back from this box: the raw RIFF body, and a JSON
+    envelope carrying the same bytes base64-encoded under one of several key
+    names, and a job to poll. This handles the first two. Written because the
+    music service answered {"success": true, "audio_data": "UklGR..."} and the
+    benchmark recorded a working model as FAILED for a whole sweep.
+    """
+    if isinstance(raw, (bytes, bytearray)) and raw[:4] == b"RIFF":
+        return bytes(raw)
+    env = raw
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            env = json.loads(raw.decode("utf-8", "replace"))
+        except ValueError:
+            return None
+    if not isinstance(env, dict):
+        return None
+    for key in ("audio_data", "audio_base64", "audio", "b64_json", "data",
+                "wav", "content"):
+        v = env.get(key)
+        if isinstance(v, list) and v and isinstance(v[0], dict):
+            v = v[0].get("audio_data") or v[0].get("b64_json") or v[0].get("audio")
+        if not isinstance(v, str) or len(v) < 32:
+            continue
+        if v.startswith("data:"):
+            v = v.split(",", 1)[-1]
+        try:
+            blob = base64.b64decode(v, validate=False)
+        except Exception:  # noqa: BLE001
+            continue
+        if blob[:4] == b"RIFF":
+            return blob
+    return None
+
+
 def _wav_seconds(raw):
     """Duration out of a RIFF header, so the real-time factor is measured
     rather than guessed from a character count."""
@@ -1589,9 +1626,12 @@ def t_speech(tok, model):
                       {"model": model, "input": text, "response_format": "wav"},
                       timeout=300)
         wall = time.time() - t0
-        if not isinstance(raw, (bytes, bytearray)):
+        wav = _as_wav(raw)
+        if not wav:
+            capture("speech", gw("/v1/audio/speech"), raw,
+                    "no WAV came back, in any envelope this knows")
             say(f"    clip {i+1} FAILED {str(raw)[:60]}"); continue
-        secs = _wav_seconds(raw)
+        secs = _wav_seconds(wav)
         rtf = round(secs / wall, 2) if secs and wall else None
         rows.append({"chars": len(text), "wall_s": round(wall, 2),
                      "audio_s": round(secs, 2) if secs else None, "rtf": rtf})
@@ -2191,6 +2231,13 @@ def t_ocr(tok, model):
                 text = (((c.get("choices") or [{}])[0].get("message") or {})
                         .get("content") or "")
                 how = "chat completions"
+            else:
+                # Both paths failed. Record the second one too: printing only
+                # the gateway's 404 hides why the fallback did not work, and
+                # the fallback is the path a vision model would have taken.
+                capture("ocr", gw("/v1/chat/completions"), c,
+                        "the /v1/ocr route refused it and the chat fallback "
+                        "refused it as well")
         wall = time.time() - t0
         if text is None:
             if not_loaded(r):
@@ -2258,9 +2305,9 @@ def t_music(tok, model):
         body = {"model": model, "prompt": MUSIC_PROMPT,
                 "duration": want, "format": "wav"}
         raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
-        audio, how = None, None
-        if isinstance(raw, (bytes, bytearray)) and raw[:4] == b"RIFF":
-            audio, how = bytes(raw), "direct"
+        audio, how = _as_wav(raw), None
+        if audio:
+            how = "direct"
         else:
             job = raw
             if isinstance(raw, (bytes, bytearray)):
@@ -2308,8 +2355,8 @@ def _music_wait(tok, session, limit=900):
                 (p or {}).get("progress") == 100:
             break
         time.sleep(2)
-    blob = api_raw(gw(f"/v1/music/sessions/{session}/download"), tok, timeout=300)
-    return bytes(blob) if isinstance(blob, (bytes, bytearray)) and blob[:4] == b"RIFF" else None
+    return _as_wav(api_raw(gw(f"/v1/music/sessions/{session}/download"),
+                           tok, timeout=300))
 
 
 def t_rerank(tok, model):
