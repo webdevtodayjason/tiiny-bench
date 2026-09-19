@@ -1175,7 +1175,11 @@ def chat(tok, model, prompt, max_tokens, thinking=False):
     v = api(gw("/v1/chat/completions"), tok, body)
     wall = time.time() - t0
     if "_error" in v:
-        return {"error": v["_error"], "wall_s": round(wall, 2)}
+        # The status, the body and the content type, not just the one-line
+        # error. Reading the body is what turned six dead ends in the
+        # 2026-09-19 sweep into four diagnoses and two measurements, and the
+        # four chat tests were the only ones that could not do it.
+        return {"error": v["_error"], "wall_s": round(wall, 2), "raw": v}
     # The suite and the Chat page read the same derivation. This used to be a
     # second copy of the same arithmetic sitting right here.
     return derive_stats(v.get("timings"), v.get("usage"), wall)
@@ -1458,6 +1462,7 @@ def t_prefill(tok, model):
         prompt = (FILLER * reps) + "\n\nReply with the single word: ok"
         r = chat(tok, model, prompt, 4)
         if "error" in r:
+            capture("prefill", gw("/v1/chat/completions"), r.get("raw"))
             say(f"    {reps:>14} FAILED {r['error'][:50]}"); continue
         rows.append(r)
         say(f"    {r['prompt_tokens']:>14} {r['prefill_tok_s']:>15.2f} {r['prefill_ms']:>12.1f}")
@@ -1493,6 +1498,7 @@ def t_sustained(tok, model, total=1500):
         th.join(timeout=5)
     after = telemetry(tok)
     if "error" in r:
+        capture("sustained", gw("/v1/chat/completions"), r.get("raw"))
         say(f"    FAILED {r['error'][:70]}"); return None
 
     util = [s["npu_util_pct"] for s in samples]
@@ -1530,6 +1536,13 @@ def t_concurrency(tok, model, levels=(1, 2, 4, 8), per=160):
         [t.start() for t in ths]; [t.join() for t in ths]
         wall = time.time() - t0
         if not res:
+            # "all failed" on its own does not say whether the box was busy,
+            # out of memory or refusing the request, and at eight parallel
+            # streams those are three different findings.
+            if errs:
+                capture("concurrency", gw("/v1/chat/completions"),
+                        errs[0].get("raw"),
+                        f"every one of {n} parallel requests failed")
             say(f"    {n:>9} all failed"); continue
         agg = sum(x["out_tokens"] for x in res) / wall
         per_stream = statistics.median(x["decode_tok_s"] for x in res)
@@ -1549,6 +1562,7 @@ def t_thinking(tok, model):
     for name, flag in (("off", False), ("on", True)):
         r = chat(tok, model, q, 700, thinking=flag)
         if "error" in r:
+            capture("thinking", gw("/v1/chat/completions"), r.get("raw"))
             say(f"    thinking {name:<3} FAILED"); continue
         out[name] = r
         say(f"    thinking {name:<3} {r['out_tokens']:>4} tokens  "
@@ -1571,6 +1585,10 @@ def t_image(tok, model):
                       timeout=300)
         wall = time.time() - t0
         if not isinstance(raw, (bytes, bytearray)):
+            if not_loaded(raw):
+                say("    no image model is resident; nothing to measure")
+                return not_measured("no Text-to-Image model was resident on the device")
+            capture("image", gw("/v1/image/generate"), raw)
             say(f"    image {i+1} FAILED {str(raw)[:60]}"); continue
         rows.append({"wall_s": round(wall, 2), "bytes": len(raw), "seed": 1000 + i})
         say(f"    image {i+1}  {wall:6.2f}s  {len(raw)//1024:>5} KB")
@@ -1595,6 +1613,37 @@ def _rejected_field(v):
     m = re.search(r"[Ee]xtra inputs are not permitted in request:\s*([A-Za-z_][A-Za-z0-9_]*)",
                   blob)
     return m.group(1) if m else None
+
+
+# Dropping a field the box names is safe for decoration and dangerous for
+# content. SongGeneration answered "Extra inputs are not permitted in request:
+# prompt" and then, once the prompt was gone, "config.lyrics, config.caption,
+# config.instruction, or prompt field is required". Two validators disagreeing
+# with each other is not something to resolve by deleting the request.
+NEVER_DROP = frozenset({"model", "prompt"})
+
+
+def _required_fields(v):
+    """The fields a refusal says are required, in the order it lists them."""
+    if not isinstance(v, dict):
+        return []
+    m = re.search(r"([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*"
+                  r"(?:\s*,?\s*or\s+[A-Za-z_][\w.]*)?)\s+(?:field\s+)?is required",
+                  str(v.get("_body") or ""))
+    if not m:
+        return []
+    parts = re.split(r"\s*,\s*|\s+or\s+", m.group(1))
+    return [x for x in (re.sub(r"^or\s+", "", q).strip() for q in parts) if x]
+
+
+def _set_path(body, dotted, value):
+    """Set a possibly-nested field named the way the device names it."""
+    node = body
+    parts = dotted.split(".")
+    for k in parts[:-1]:
+        node = node.setdefault(k, {})
+    node[parts[-1]] = value
+    return body
 
 
 def _as_wav(raw):
@@ -2415,10 +2464,24 @@ def t_music(tok, model):
             drop = _rejected_field(raw)
             if not drop or drop not in body:
                 break
+            if drop in NEVER_DROP:
+                say(f"    it refuses {drop}, which is the request; not dropping it")
+                break
             say(f"    this model will not take {drop}; asking again without it")
             body.pop(drop)
             t0 = time.time()
             raw = api_raw(gw("/v1/music/generate"), tok, body, timeout=900)
+        # A refusal that names what it wants instead is the box handing over
+        # the shape. SongGeneration asks for config.lyrics, config.caption,
+        # config.instruction or prompt; the first config path it offers gets
+        # the same prompt every other music model is given.
+        need = [f for f in _required_fields(raw) if f.startswith("config.")]
+        if need and not _as_wav(raw):
+            say(f"    it asks for {need[0]}; sending the prompt there instead")
+            t0 = time.time()
+            raw = api_raw(gw("/v1/music/generate"), tok,
+                          _set_path({"model": model}, need[0], MUSIC_PROMPT),
+                          timeout=900)
         audio, how = _as_wav(raw), None
         if audio:
             how = "direct"

@@ -171,6 +171,7 @@ class FakeState:
         # session to poll. Both are real shapes on this device, so both are here.
         self.music_async = False
         self.music_refuses = ()
+        self.music_wants_config = False
         self.music_calls = 0
         # CustomVoice takes the plain body; its two siblings answer 500.
         self.speech_needs_voice = False
@@ -487,6 +488,13 @@ class FakeHandler(BaseHTTPRequestHandler):
                     "success": False, "audio_data": None,
                     "error": "Extra inputs are not permitted in request: %s" % field,
                     "error_code": "INVALID_REQUEST"})
+        cfg = body.get("config") or {}
+        if self.state.music_wants_config and not any(
+                cfg.get(k) for k in ("lyrics", "caption", "instruction")):
+            return self._send(400, {"error": {
+                "message": "config.lyrics, config.caption, config.instruction, "
+                           "or prompt field is required",
+                "type": "invalid_request_error"}})
         secs = float(body.get("duration") or 8)
         if self.state.music_async:
             sid = "sess-%d" % (len(self.state.music_sessions) + 1)

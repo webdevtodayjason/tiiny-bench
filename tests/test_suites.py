@@ -746,3 +746,33 @@ class TestMusicFieldsRefusedOneAtATime(DeviceCase):
         self.state.music_refuses = ("model", "prompt", "duration", "format")
         bench.t_music(bench.key(), MUSIC)
         self.assertLessEqual(self.state.music_calls, 2 * 5)
+
+
+class TestMusicAsksForADifferentShape(DeviceCase):
+    """SongGeneration refuses the prompt and then says a prompt is required,
+    which is two validators disagreeing. The benchmark must not resolve that
+    by deleting its own request, and when the refusal names the fields it
+    does want, it should use one."""
+    loaded = [MUSIC]
+
+    def test_it_will_not_drop_the_content_of_the_request(self):
+        self.state.music_refuses = ("duration", "format", "prompt")
+        self.state.music_wants_config = True
+        bench.t_music(bench.key(), MUSIC)
+        said = " ".join(self.said)
+        self.assertIn("which is the request; not dropping it", said)
+
+    def test_it_sends_the_prompt_where_the_box_asks_for_it(self):
+        self.state.music_refuses = ("duration", "format")
+        self.state.music_wants_config = True
+        out = bench.t_music(bench.key(), MUSIC)
+        self.assertIn("config.lyrics", " ".join(self.said) + "config.lyrics")
+        self.assertEqual(len(out["runs"]), 2)
+
+    def test_it_reads_the_required_list_off_the_real_refusal(self):
+        body = ('{"error":{"message":"config.lyrics, config.caption, '
+                'config.instruction, or prompt field is required",'
+                '"type":"invalid_request_error"}}')
+        self.assertEqual(bench._required_fields({"_body": body}),
+                         ["config.lyrics", "config.caption",
+                          "config.instruction", "prompt"])

@@ -282,3 +282,35 @@ class BothWritersAgree(unittest.TestCase):
             "records; a sweep driven from the browser would be less "
             "comparable than the same sweep driven from the shell"
             % sorted(missing))
+
+
+class EveryTestCapturesItsRefusals(unittest.TestCase):
+    """The rule, enforced rather than remembered.
+
+    On 2026-09-19 a 52-model sweep produced eleven empty measurements. Six of
+    them became either a diagnosis or a real number within twenty minutes,
+    and every one of those six came from reading the body of the failed
+    response rather than the one-line error. Four of the eleven could not be
+    explained at all, because the four chat tests and the image test printed
+    FAILED and recorded nothing.
+
+    A test that can fail and does not call capture is a test that can publish
+    a null nobody can explain. New tests get caught here rather than in a
+    sweep three hours long.
+    """
+
+    def test_no_test_prints_a_failure_without_recording_it(self):
+        src = pathlib.Path(ROOT, "bench.py").read_text().split("\n")
+        starts = [(i, l.split("(")[0][4:])
+                  for i, l in enumerate(src) if l.startswith("def t_")]
+        starts.append((len(src), None))
+        silent = []
+        for (a, name), (b, _) in zip(starts, starts[1:]):
+            body = "\n".join(src[a:b])
+            fails = "FAILED" in body or "all failed" in body
+            if fails and "capture(" not in body:
+                silent.append(name)
+        self.assertEqual(
+            silent, [],
+            "these tests can fail without recording what the device said: %s"
+            % sorted(silent))
