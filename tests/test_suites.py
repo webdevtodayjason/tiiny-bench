@@ -453,5 +453,30 @@ class TestTheRunPageIsOfferedEveryClass(DeviceCase):
         self.assertIsNotNone(rec["results"]["rerank"])
 
 
+class TestTheVersionIsOneNumber(unittest.TestCase):
+    """bench.VERSION and tiiny-app.json have to say the same thing.
+
+    They did not. v0.1.5 and v0.1.6 were both tagged and both shipped with
+    VERSION = "0.1.4" in bench.py, so the app printed 0.1.4 in its banner, in
+    --version and in the selfcheck, and stamped bench_version 0.1.4 into every
+    result file it wrote. The 48-measurement chat sweep of 19 September, run by
+    the 0.1.6 install, says 0.1.4 on disk. Two numbers that have to agree and
+    nothing checking them is how that happens twice.
+    """
+
+    def test_the_two_places_the_version_lives_agree(self):
+        manifest = json.loads(
+            pathlib.Path(ROOT, "tiiny-app.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["version"], bench.VERSION,
+                         "tiiny-app.json and bench.VERSION disagree")
+
+    def test_a_result_file_is_stamped_with_the_version_that_wrote_it(self):
+        # The stamp is what a report has to trust when it says which build a
+        # number came from, so it reads the constant rather than a literal.
+        self.assertIn('"bench_version": VERSION',
+                      pathlib.Path(ROOT, "bench.py").read_text(encoding="utf-8")
+                      .replace('"bench_version": VERSION,', '"bench_version": VERSION'))
+
+
 if __name__ == "__main__":
     unittest.main()
