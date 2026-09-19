@@ -2557,6 +2557,22 @@ LOWER_IS_BETTER = {"s_per_image", "s_per_page"}
 CHAT_TYPES = set(SUITES)
 
 
+def _came_up_slow(test):
+    """Did this test fail only because the model was not answering yet?
+
+    load() waits for the model to appear in /running and the device puts it
+    there before its runtime is accepting, so the first call can come back
+    502 Bad Gateway. Two embedding models recorded nothing at all in the
+    2026-09-19 sweep for this reason and both measured fine minutes later,
+    which is a false negative published as a fact.
+
+    There is no field on the device that separates "listed" from "answering",
+    so the only honest signal is the 502 itself.
+    """
+    rec = UNPARSED.get(test) or {}
+    return rec.get("status") == 502
+
+
 def suite(tok, model, want, meta, cat=None):
     """One model, all the requested tests, returned as a record."""
     # Per model, not per process: the web app serves for days and one sweep's
@@ -2582,6 +2598,11 @@ def suite(tok, model, want, meta, cat=None):
     for i, name in enumerate(todo):
         emit("test", model=model, test=name, index=i, total=len(todo))
         results[name] = TESTS[name](tok, model)
+        if not results[name] and _came_up_slow(name):
+            say("    the runtime answered 502; giving it 15s and asking again")
+            UNPARSED.pop(name, None)
+            time.sleep(15)
+            results[name] = TESTS[name](tok, model)
         emit("test_done", model=model, test=name, index=i, total=len(todo))
     # Keys may be a test name or a test name plus a qualifier ("ocr
     # fallback"), so match on the first word rather than the whole key,

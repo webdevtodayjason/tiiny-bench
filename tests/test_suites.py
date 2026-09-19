@@ -678,3 +678,49 @@ class TestSpeechVoiceMode(DeviceCase):
         self.assertTrue(bench._voice_mode_refused(
             {"_status": 500,
              "_body": '{"error":{"message":"custom_voice is not supported by this model"}}'}))
+
+
+# ------------------------------------------------- a runtime that is not ready
+EMBED = "Qwen/Qwen3-Embedding-0.6B"
+
+
+class TestColdRuntimeIsRetried(DeviceCase):
+    """The device lists a model as running before its runtime accepts
+    connections, so the first call can come back 502. Two embedding models
+    recorded nothing at all in the 2026-09-19 sweep for exactly this, and both
+    measured fine minutes later. A false negative published as a fact is worse
+    than a slow benchmark."""
+    loaded = [EMBED]
+
+    def test_a_502_on_the_first_pass_is_asked_again(self):
+        self.state.cold_routes["/v1/embeddings"] = 3   # all three batch sizes
+        out = bench.suite(bench.key(), EMBED, ["embed"],
+                          {"id": EMBED, "type": "Text Embedding"}, {})
+        self.assertTrue(out["results"]["embed"],
+                        "the retry should have produced numbers")
+        self.assertIn("502", " ".join(self.said))
+
+    def test_a_real_failure_is_not_retried_forever(self):
+        self.state.cold_routes["/v1/embeddings"] = 99
+        out = bench.suite(bench.key(), EMBED, ["embed"],
+                          {"id": EMBED, "type": "Text Embedding"}, {})
+        self.assertFalse(out["results"]["embed"])
+        self.assertEqual(out["unparsed"]["embed"]["status"], 502)
+
+
+class TestEmbeddings(DeviceCase):
+    """The embedding test had no route to run against until 2026-09-19, so
+    nothing checked that a batch of n comes back as n vectors of one width."""
+    loaded = [EMBED]
+
+    def test_it_measures_every_batch_size(self):
+        out = bench.t_embed(bench.key(), EMBED)
+        self.assertEqual([r["batch"] for r in out["runs"]], [1, 8, 32])
+        self.assertEqual([r["returned"] for r in out["runs"]], [1, 8, 32])
+        self.assertEqual({r["dim"] for r in out["runs"]}, {1024})
+        self.assertGreater(out["emb_per_s"], 0)
+
+    def test_no_embedding_model_resident_says_so_rather_than_failing(self):
+        self.state.loaded = set()
+        out = bench.t_embed(bench.key(), EMBED)
+        self.assertIn("resident", out["not_measured"])

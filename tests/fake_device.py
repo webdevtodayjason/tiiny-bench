@@ -173,6 +173,9 @@ class FakeState:
         # CustomVoice takes the plain body; its two siblings answer 500.
         self.speech_needs_voice = False
         self.speech_speakers = None
+        # Routes that answer 502 once before working, imitating a runtime the
+        # device lists as running before it is accepting connections.
+        self.cold_routes = {}
         self.music_sessions = {}
         # What the added routes actually received, so a test can prove the
         # client sent real work rather than a well-formed empty request.
@@ -377,6 +380,10 @@ class FakeHandler(BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if not self._authed():
             return None
+        if self.state.cold_routes.get(path):
+            self.state.cold_routes[path] -= 1
+            return self._send(502, {"error": {"message": "Bad Gateway",
+                                              "type": "upstream_error"}})
         if path == "/v1/chat/completions":
             return self._chat(self._body())
         if path == "/v1/audio/transcriptions":
@@ -389,6 +396,8 @@ class FakeHandler(BaseHTTPRequestHandler):
             return self._music(self._body())
         if path == "/v1/rerank":
             return self._rerank(self._body())
+        if path == "/v1/embeddings":
+            return self._embeddings(self._body())
         prefix = "/api/v1/models/"
         for suffix, handler in (("/start", self._start), ("/stop", self._stop)):
             if path.startswith(prefix) and path.endswith(suffix):
@@ -501,6 +510,25 @@ class FakeHandler(BaseHTTPRequestHandler):
         text = body.get("input") or ""
         return self._send_bytes(200, "audio/wav",
                                 wav_bytes(max(0.5, len(text) / 18.0)))
+
+    def _embeddings(self, body):
+        """One vector per input, at a fixed width. There was no route here at
+        all until 2026-09-19, so nothing exercised the embedding test and the
+        retry that covers a cold runtime had nothing to fail against."""
+        if not self._have("Text Embedding"):
+            return self._send(503, NOT_LOADED)
+        items = body.get("input")
+        if isinstance(items, str):
+            items = [items]
+        if not items:
+            return self._send(400, {"error": {"message": "input is required",
+                                              "type": "invalid_request_error"}})
+        dim = 1024
+        return self._send(200, {
+            "object": "list",
+            "model": body.get("model"),
+            "data": [{"object": "embedding", "index": i,
+                      "embedding": [0.0] * dim} for i in range(len(items))]})
 
     def _rerank(self, body):
         if not self._have("Text Reranking"):
