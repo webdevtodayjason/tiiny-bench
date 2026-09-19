@@ -20,6 +20,7 @@ Design notes, since they were deliberate:
   legible to a colourblind reader. Nothing else gets a hue.
 """
 import base64
+import hashlib
 import html
 import json
 import math
@@ -179,141 +180,666 @@ def bars(rows, ylabel, w=620, h=240, fmt="{:.0f}", colour=None):
     return "".join(out)
 
 
+# ------------------------------------------------------ colour per model
+# A model has to be the same colour in every chart on the page, so the colour
+# comes from the id rather than from its position in a list: adding a model,
+# or one dropping out of a sweep, must not repaint the others. The hue is a
+# hash, and the saturation and lightness are fixed at values that stay legible
+# on the near-black ground and stay apart from each other in greyscale print.
+HUE_STEPS = 30
+
+
+def _hue_of(model):
+    h = hashlib.sha1((model or "?").encode("utf-8")).digest()
+    return (h[0] << 8 | h[1]) % HUE_STEPS
+
+
+def model_colours(models):
+    """{model: css colour}, stable per id and nudged apart when two collide.
+
+    Two models landing on the same hue inside one report is confusing even
+    though it is rare, so a collision walks to the next free slot. The walk is
+    deterministic in sorted id order, so the same set of models always gets the
+    same answer.
+    """
+    taken, out = {}, {}
+    for m in sorted(models or []):
+        slot = _hue_of(m)
+        # A collision walks by a stride coprime with the wheel rather than to
+        # the next slot along. Two models nudged into neighbouring hues are
+        # 15 degrees apart and indistinguishable, which is worse than the
+        # collision was; a stride of 7 lands the loser on the far side and
+        # still visits every slot before giving up.
+        for step in range(HUE_STEPS):
+            cand = (slot + step * 7) % HUE_STEPS
+            if cand not in taken:
+                slot = cand
+                break
+        taken[slot] = m
+        deg = slot * (360 / HUE_STEPS)
+        # Warm hues read brighter than cool ones at the same lightness, so the
+        # blues and violets are lifted a little to keep the set even. Alternate
+        # slots are lightened again: a dozen models on one wheel puts some of
+        # them 12 degrees apart, and a difference in value separates those two
+        # when the difference in hue no longer can, including in greyscale.
+        lift = 8 if 200 <= deg <= 300 else 0
+        out[m] = "hsl(%.0f 62%% %d%%)" % (deg, 56 + lift + (12 if slot % 2 else 0))
+    return out
+
+
+def legend(models, colours, title=""):
+    chips = "".join(
+        f'<span class="lg"><i style="background:{colours[m]}"></i>'
+        f'{html.escape(short(m))}</span>' for m in sorted(models))
+    head = f'<div class="lgt">{html.escape(title)}</div>' if title else ""
+    return f'<div class="legend">{head}{chips}</div>'
+
+
+# ----------------------------------------------------------- new charts
+def dual_axis(points, w=660, h=290):
+    """Time to first token and decode rate against prompt length, on one chart.
+
+    Prefill rate alone hides the thing a person actually feels, which is how
+    long they wait before the first word appears. Both series share an x axis
+    and get their own y axis: TTFT solid on the left, decode dashed on the
+    right, every point labelled on both.
+    """
+    pts = sorted(points, key=lambda p: p["prompt_tokens"])
+    if len(pts) < 2:
+        return ""
+    pad_l, pad_r, pad_t, pad_b = 62, 88, 26, 46
+    xs = [p["prompt_tokens"] for p in pts]
+    lo, hi = math.log10(max(min(xs), 1)), math.log10(max(max(xs), 10))
+    ttft = [p.get("ttft_s") or 0 for p in pts]
+    dec = [p.get("decode_tok_s") or 0 for p in pts]
+    t1 = max(ttft) * 1.28 or 1
+    d1 = max(dec) * 1.28 or 1
+
+    def px(x):
+        return _scale(math.log10(max(x, 1)), lo, hi, pad_l, w - pad_r)
+
+    def pl(y):
+        return _scale(y, 0, t1, h - pad_b, pad_t)
+
+    def pr(y):
+        return _scale(y, 0, d1, h - pad_b, pad_t)
+
+    o = [f'<svg viewBox="0 0 {w} {h}" class="chart" role="img" aria-label="'
+         f'time to first token and decode rate against prompt length">']
+    for i in range(4):
+        y = t1 * i / 3
+        yy = pl(y)
+        o.append(f'<line x1="{pad_l}" y1="{yy:.1f}" x2="{w-pad_r}" y2="{yy:.1f}" '
+                 f'stroke="{C["line"]}" stroke-width="1"/>')
+        o.append(f'<text x="{pad_l-9}" y="{yy+4:.1f}" text-anchor="end" class="tick" '
+                 f'fill="{C["copper"]}">{y:.2f}s</text>')
+        o.append(f'<text x="{w-pad_r+22}" y="{pr(d1*i/3)+4:.1f}" class="tick" '
+                 f'fill="{C["cool"]}">{d1*i/3:.0f}</text>')
+    dt = " ".join(f"{'M' if i == 0 else 'L'}{px(p['prompt_tokens']):.1f},"
+                  f"{pl(p.get('ttft_s') or 0):.1f}" for i, p in enumerate(pts))
+    dd = " ".join(f"{'M' if i == 0 else 'L'}{px(p['prompt_tokens']):.1f},"
+                  f"{pr(p.get('decode_tok_s') or 0):.1f}" for i, p in enumerate(pts))
+    o.append(f'<path d="{dd}" fill="none" stroke="{C["cool"]}" stroke-width="2" '
+             f'stroke-dasharray="6 4" stroke-linejoin="round"/>')
+    o.append(f'<path d="{dt}" fill="none" stroke="{C["copper"]}" stroke-width="2.4" '
+             f'stroke-linejoin="round"/>')
+    for p in pts:
+        x = px(p["prompt_tokens"])
+        yt, yd = pl(p.get("ttft_s") or 0), pr(p.get("decode_tok_s") or 0)
+        o.append(f'<circle cx="{x:.1f}" cy="{yd:.1f}" r="3.2" fill="{C["ground"]}" '
+                 f'stroke="{C["cool"]}" stroke-width="2"/>')
+        o.append(f'<circle cx="{x:.1f}" cy="{yt:.1f}" r="3.4" fill="{C["ground"]}" '
+                 f'stroke="{C["copper"]}" stroke-width="2"/>')
+        o.append(f'<text x="{x:.1f}" y="{yt-10:.1f}" text-anchor="middle" class="val" '
+                 f'fill="{C["copper"]}">{p.get("ttft_s") or 0:.2f}s</text>')
+        o.append(f'<text x="{x:.1f}" y="{yd+18:.1f}" text-anchor="middle" class="val" '
+                 f'fill="{C["cool"]}">{p.get("decode_tok_s") or 0:.0f}</text>')
+        o.append(f'<text x="{x:.1f}" y="{h-pad_b+20:.1f}" text-anchor="middle" '
+                 f'class="tick">{p["prompt_tokens"]:,}</text>')
+    o.append(f'<text x="{pad_l}" y="14" class="axis" fill="{C["copper"]}">'
+             f'time to first token</text>')
+    o.append(f'<text x="{w-pad_r}" y="14" text-anchor="end" class="axis" '
+             f'fill="{C["cool"]}">decode tok/s (dashed)</text>')
+    o.append(f'<text x="{pad_l}" y="{h-6}" class="axis">prompt tokens</text>')
+    o.append("</svg>")
+    return "".join(o)
+
+
+def grouped_bars(groups, series, w=660, h=280, fmt="{:.0f}"):
+    """groups: [(label, [v1, v2], note)]. series: [(name, colour), ...].
+
+    Aggregate against per-stream at each concurrency level, side by side, so
+    the gap between them is the thing you see rather than something you have to
+    hold in your head across two charts.
+    """
+    if not groups:
+        return ""
+    pad_l, pad_r, pad_t, pad_b = 58, 18, 30, 52
+    vmax = max(max(vs) for _, vs, _ in groups) * 1.22 or 1
+    span = w - pad_l - pad_r
+    gw = min(span / len(groups), 150)
+    pad_l += (span - gw * len(groups)) / 2
+    o = [f'<svg viewBox="0 0 {w} {h}" class="chart" role="img" aria-label="'
+         f'{html.escape(" and ".join(n for n, _ in series))} at each level">']
+    for i in range(4):
+        y = vmax * i / 3
+        yy = _scale(y, 0, vmax, h - pad_b, pad_t)
+        o.append(f'<line x1="{pad_l}" y1="{yy:.1f}" x2="{w-pad_r}" y2="{yy:.1f}" '
+                 f'stroke="{C["line"]}" stroke-width="1"/>')
+        o.append(f'<text x="{pad_l-9}" y="{yy+4:.1f}" text-anchor="end" '
+                 f'class="tick">{fmt.format(y)}</text>')
+    n = len(series)
+    for gi, (lab, vs, note) in enumerate(groups):
+        base = pad_l + gi * gw
+        bw = gw * 0.66 / n
+        for si, v in enumerate(vs):
+            x = base + gw * 0.17 + si * bw
+            yy = _scale(v, 0, vmax, h - pad_b, pad_t)
+            o.append(f'<rect x="{x:.1f}" y="{yy:.1f}" width="{bw*0.86:.1f}" '
+                     f'height="{h-pad_b-yy:.1f}" fill="{series[si][1]}" '
+                     f'opacity=".9" rx="2"/>')
+            o.append(f'<text x="{x+bw*0.43:.1f}" y="{yy-7:.1f}" text-anchor="middle" '
+                     f'class="val">{fmt.format(v)}</text>')
+        o.append(f'<text x="{base+gw/2:.1f}" y="{h-pad_b+19:.1f}" text-anchor="middle" '
+                 f'class="tick">{html.escape(str(lab))}</text>')
+        if note:
+            o.append(f'<text x="{base+gw/2:.1f}" y="{h-pad_b+34:.1f}" '
+                     f'text-anchor="middle" class="tick dim">{html.escape(note)}</text>')
+    lx = pad_l
+    for name, col in series:
+        o.append(f'<rect x="{lx:.1f}" y="{pad_t-22}" width="9" height="9" fill="{col}" rx="1"/>')
+        o.append(f'<text x="{lx+14:.1f}" y="{pad_t-14}" class="tick">{html.escape(name)}</text>')
+        lx += 20 + len(name) * 6.6
+    o.append("</svg>")
+    return "".join(o)
+
+
+def hbars(rows, w=660, unit="", fmt="{:.1f}", colours=None, rowh=30):
+    """rows: [(label, value, note)], drawn along the y axis.
+
+    Long model names read fine here and are unreadable rotated under a vertical
+    bar, which is the whole reason this exists: sixteen names under sixteen
+    columns is a smear.
+
+    The value and its note are drawn one after the other at the end of the bar
+    rather than at opposite ends of the row, and the bars are scaled to leave
+    room for the longest of them. Putting the note hard right let a long value
+    label run straight into it, which is the same unreadable smear moved.
+    """
+    if not rows:
+        return ""
+    pad_l, pad_t, pad_b = 8, 10, 20
+    h = pad_t + pad_b + rowh * len(rows)
+    label_w = max(96, min(200, 8 + 7.0 * max(len(str(l)) for l, _, _ in rows)))
+    # Monospace, so a character really is a fixed width and this arithmetic
+    # holds rather than approximating.
+    ch = 6.7
+    tail = max(len(fmt.format(v) + unit + ("  " + n if n else ""))
+               for _, v, n in rows) * ch + 16
+    x0 = pad_l + label_w
+    track = max(60, w - x0 - tail)
+    vmax = max(v for _, v, _ in rows) or 1
+    o = [f'<svg viewBox="0 0 {w} {h}" class="chart" role="img" '
+         f'aria-label="{html.escape(unit.strip() or "comparison")}">']
+    for i, (lab, v, note) in enumerate(rows):
+        y = pad_t + i * rowh
+        col = (colours or {}).get(lab) or C["copper"]
+        bw = max(_scale(v, 0, vmax, 0, track), 1)
+        o.append(f'<text x="{pad_l}" y="{y+rowh*0.64:.1f}" class="tick hlab">'
+                 f'{html.escape(str(lab))}</text>')
+        o.append(f'<rect x="{x0:.1f}" y="{y+rowh*0.2:.1f}" width="{bw:.1f}" '
+                 f'height="{rowh*0.56:.1f}" fill="{col}" opacity=".9" rx="2"/>')
+        o.append(f'<text x="{x0+bw+8:.1f}" y="{y+rowh*0.64:.1f}" class="val">'
+                 f'{fmt.format(v)}{html.escape(unit)}'
+                 + (f'<tspan class="dim">  {html.escape(note)}</tspan>' if note else "")
+                 + '</text>')
+    o.append("</svg>")
+    return "".join(o)
+
+
+def chips(items):
+    """A strip of small labelled facts. Anything missing is left out rather
+    than drawn as a dash, because an empty chip reads as a measurement of
+    nothing."""
+    live = [(k, v) for k, v in items if v not in (None, "", "None")]
+    if not live:
+        return ""
+    return ('<div class="chips">' + "".join(
+        f'<span class="chip"><b>{html.escape(str(v))}</b>'
+        f'<span>{html.escape(k)}</span></span>' for k, v in live) + "</div>")
+
+
 # --------------------------------------------------------------- sections
+# Which endpoint each test's numbers came off. Printed under a model so a
+# reader can go and reproduce it against their own box rather than take this
+# page's word for anything.
+ENDPOINT = {
+    "prefill": "/v1/chat/completions",
+    "sustained": "/v1/chat/completions",
+    "concurrency": "/v1/chat/completions",
+    "thinking": "/v1/chat/completions",
+    "image": "/v1/image/generate",
+    "speech": "/v1/audio/speech",
+    "embed": "/v1/embeddings",
+    "asr": "/v1/audio/transcriptions",
+    "ocr": "/v1/ocr",
+    "music": "/v1/music/generate",
+    "rerank": "/v1/rerank",
+}
+
+
 def stat(value, label, note=""):
     n = f'<div class="note">{html.escape(note)}</div>' if note else ""
     return (f'<div class="stat"><div class="v">{value}</div>'
             f'<div class="k">{html.escape(label)}</div>{n}</div>')
 
 
-def model_section(run, idx):
+def caption(text):
+    """A sentence computed from this model's own numbers, never a stock line."""
+    return f'<p class="cap">{text}</p>'
+
+
+def points_table(pf):
+    head = ("<tr><th>prompt tokens</th><th class=num>time to first token</th>"
+            "<th class=num>prefill tok/s</th><th class=num>decode tok/s</th></tr>")
+    body = "".join(
+        f'<tr><td class="num">{p["prompt_tokens"]:,}</td>'
+        f'<td class="num">{(p.get("ttft_s") or 0):.2f} s</td>'
+        f'<td class="num">{(p.get("prefill_tok_s") or 0):,.0f}</td>'
+        f'<td class="num">{(p.get("decode_tok_s") or 0):.1f}</td></tr>'
+        for p in sorted(pf, key=lambda p: p["prompt_tokens"]))
+    return f'<div class="tablewrap"><table><thead>{head}</thead><tbody>{body}</tbody></table></div>'
+
+
+def model_section(run, idx, colour=None):
     r = run.get("results") or {}
     m = run.get("model") or "?"
+    col = colour or C["copper"]
     parts = [f'<section class="model" id="m{idx}">']
-    meta = []
-    if run.get("params"):
-        meta.append(f'{run["params"]} params')
-    if run.get("npu_usage"):
-        meta.append(f'{run["npu_usage"]} NPU units')
-    if run.get("total_size"):
-        meta.append(f'{run["total_size"] / 1e9:.1f} GB')
-    parts.append(
-        f'<header class="mhead"><h3>{html.escape(short(m))}</h3>'
-        f'<div class="mmeta">{html.escape(" · ".join(meta)) if meta else ""}</div>'
-        f'<div class="mfull">{html.escape(m)}</div>'
-        f'<div class="mrun">run <b>{html.escape(run["label"])}</b> · {html.escape(run["stamp"])}</div>'
-        f'</header>')
 
-    # --- headline numbers ------------------------------------------------
+    # --- header: what it is, then how it was run -------------------------
+    pill = []
+    if run.get("type"):
+        pill.append(run["type"])
+    if run.get("params"):
+        pill.append(f'{run["params"]} params')
+    if run.get("npu_usage"):
+        pill.append(f'{run["npu_usage"]} of 100 NPU units')
+    if run.get("total_size"):
+        pill.append(f'{run["total_size"] / 1e9:.1f} GB on disk')
+    meta = [f'run {run["label"]}', run["stamp"]]
+    if run.get("build"):
+        meta.append(f'TiinyOS {run["build"]}')
+    if run.get("elapsed_s"):
+        meta.append(f'{run["elapsed_s"]:.0f}s of measurement')
+    if (r.get("thinking") or {}).get("on"):
+        meta.append("measured with reasoning off and on")
+    seen = [ENDPOINT[k] for k in r if k in ENDPOINT]
+    src = sorted(set(seen))
+    parts.append(
+        f'<header class="mhead"><div class="mtop">'
+        f'<span class="dot" style="background:{col}"></span>'
+        f'<h3>{html.escape(short(m))}</h3></div>'
+        f'<div class="pills">'
+        + "".join(f'<span class="pill">{html.escape(x)}</span>' for x in pill)
+        + f'</div><div class="mfull">{html.escape(m)}</div>'
+        f'<div class="mrun">{html.escape(" &middot; ".join(meta))}</div>'.replace(
+            "&amp;middot;", "&middot;")
+        + (f'<div class="msrc">measured through {html.escape(", ".join(src))} '
+           f'on a Tiiny Pocket Lab</div>' if src else "")
+        + '</header>')
+
+    # --- the five headline numbers ---------------------------------------
     s = r.get("sustained") or {}
-    srun = (s or {}).get("run") or {}
+    srun = s.get("run") or {}
     cc = r.get("concurrency") or []
-    pf = [p for p in (r.get("prefill") or []) if p.get("prefill_tok_s")]
+    pf = [p for p in (r.get("prefill") or []) if p.get("prompt_tokens")]
+    th = r.get("thinking") or {}
     cards = []
+    if pf:
+        first = min(pf, key=lambda p: p["prompt_tokens"])
+        if first.get("decode_tok_s"):
+            cards.append(stat(
+                f'{first["decode_tok_s"]:.1f}<span class="u">tok/s</span>',
+                "single stream",
+                f'first token after {first.get("ttft_s", 0):.2f}s at '
+                f'{first["prompt_tokens"]:,} tokens in'))
     if srun.get("decode_tok_s"):
         cards.append(stat(f'{srun["decode_tok_s"]:.1f}<span class="u">tok/s</span>',
                           "sustained decode",
-                          f'{srun.get("out_tokens", 0)} tokens, one request'))
-    if pf:
-        best = max(p["prefill_tok_s"] for p in pf)
-        cards.append(stat(f'{best:,.0f}<span class="u">tok/s</span>', "peak prefill",
-                          "document ingestion"))
+                          f'{srun.get("out_tokens", 0):,} tokens unbroken'))
     if cc:
         top = max(cc, key=lambda x: x["aggregate_tok_s"])
         cards.append(stat(f'{top["aggregate_tok_s"]:.1f}<span class="u">tok/s</span>',
-                          f'aggregate at {top["parallel"]}x',
-                          "all streams together"))
-    th = r.get("thinking") or {}
+                          f'batched at {top["parallel"]} streams',
+                          "every caller added together"))
+    if pf:
+        deep = max(pf, key=lambda p: p["prompt_tokens"])
+        cards.append(stat(f'{deep.get("ttft_s", 0):.2f}<span class="u">s</span>',
+                          "deepest prefill",
+                          f'wait at {deep["prompt_tokens"]:,} tokens of prompt'))
     if th.get("on") and th.get("off") and th["off"].get("wall_s"):
         ratio = th["on"]["wall_s"] / th["off"]["wall_s"]
         cards.append(stat(f'{ratio:.1f}<span class="u">x</span>', "reasoning tax",
-                          "wall time, thinking on vs off"))
-    during = (s or {}).get("during") or {}
-    after = (s or {}).get("telemetry_after") or {}
-    if during.get("npu_util_median") is not None:
-        cards.append(stat(f'{during["npu_util_median"]:.0f}<span class="u">%</span>',
-                          "NPU while running",
-                          f'peak {during.get("npu_util_peak", 0):.0f}%, '
-                          f'{during.get("npu_mem_peak_mb", 0):,.0f} MB'))
-    elif after.get("npu_mem_used_mb"):
-        # Older runs sampled utilisation only once the request had already
-        # returned, which always caught the box going idle. That 0% said
-        # nothing, so it is not shown; the resident memory from the same
-        # sample is still real.
-        cards.append(stat(f'{after["npu_mem_used_mb"]:,.0f}<span class="u">MB</span>',
-                          "NPU memory resident", "sampled after the run"))
+                          "wall clock, thinking on against off"))
     if cards:
         parts.append('<div class="stats">' + "".join(cards) + "</div>")
 
     # --- prefill ---------------------------------------------------------
-    if pf:
-        pts = [(p["prompt_tokens"], p["prefill_tok_s"]) for p in pf]
+    if len(pf) > 1:
+        lo = min(pf, key=lambda p: p["prompt_tokens"])
+        hi = max(pf, key=lambda p: p["prompt_tokens"])
+        grew = hi["prompt_tokens"] / max(lo["prompt_tokens"], 1)
+        waited = (hi.get("ttft_s") or 0) / max(lo.get("ttft_s") or 0.0001, 0.0001)
+        rate_lo = lo.get("prefill_tok_s") or 0
+        rate_hi = hi.get("prefill_tok_s") or 0
+        if rate_hi > rate_lo * 1.15:
+            reading = (f'Reading got <b>cheaper</b> per token as the prompt grew, from '
+                       f'{rate_lo:,.0f} to {rate_hi:,.0f} tok/s.')
+        elif rate_hi < rate_lo * 0.85:
+            reading = (f'Reading got <b>dearer</b> per token as the prompt grew, from '
+                       f'{rate_lo:,.0f} down to {rate_hi:,.0f} tok/s.')
+        else:
+            reading = f'Reading held steady at about {rate_hi:,.0f} tok/s at every length.'
+        cap = (f'{grew:.0f}x the prompt cost <b>{waited:.1f}x</b> the wait, '
+               f'{(lo.get("ttft_s") or 0):.2f}s at {lo["prompt_tokens"]:,} tokens against '
+               f'{(hi.get("ttft_s") or 0):.2f}s at {hi["prompt_tokens"]:,}. {reading} '
+               f'Decode stayed near {(hi.get("decode_tok_s") or 0):.0f} tok/s throughout, '
+               f'so the prompt is paid for once at the front and not again per word.')
         parts.append(
-            '<div class="panel"><div class="ptitle">Prefill scaling</div>'
-            '<p class="lede">What a long prompt costs to read. A flat line means '
-            'context is cheap; a falling one means every extra page of prompt is '
-            'taxed twice.</p>'
-            + line_chart([("prefill", pts, C["copper"])],
-                         "prompt tokens", "prefill tok/s", logx=True)
-            + "</div>")
+            '<div class="panel"><div class="ptitle">Prefill against prompt length</div>'
+            '<p class="lede">What a long prompt costs to read, and what it does to the '
+            'wait before the first word. Solid is time to first token on the left axis; '
+            'dashed is decode rate on the right.</p>'
+            + dual_axis(pf) + caption(cap) + points_table(pf) + "</div>")
 
     # --- concurrency -----------------------------------------------------
     if cc:
-        agg = [(str(c["parallel"]) + "x", c["aggregate_tok_s"],
-                f'{c["per_stream_tok_s"]:.0f}/stream') for c in cc]
-        one = cc[0]["aggregate_tok_s"] if cc else 0
+        groups = [(f'{c["parallel"]}x', [c["aggregate_tok_s"], c["per_stream_tok_s"]],
+                   f'{c["wall_s"]:.0f}s wall') for c in cc]
+        one = cc[0]["aggregate_tok_s"] or 0
         best = max(c["aggregate_tok_s"] for c in cc)
         gain = best / one if one else 0
-        # A box that queues shows flat aggregate and linear wall time. Saying
-        # "peak 1.03x" without naming that is technically true and useless.
+        deepest = max(cc, key=lambda c: c["parallel"])
         if 0 < gain < 1.25:
-            verdict = (f'Aggregate is <b>flat</b> at {best:.0f} tok/s no matter how many '
-                       f'callers arrive, and wall time grows in step with them. The box is '
-                       f'not sharing itself between requests, it is queueing them. Plan for '
-                       f'one inference at a time.')
+            cap = (f'{deepest["parallel"]} streams deliver <b>{gain:.2f}x</b> the aggregate '
+                   f'of one, and wall time grows in step with the callers, '
+                   f'{cc[0]["wall_s"]:.0f}s to {deepest["wall_s"]:.0f}s. The box is not '
+                   f'sharing itself between requests, it is queueing them. Plan for one '
+                   f'inference at a time.')
         else:
-            verdict = (f'Peak aggregate is <b>{gain:.2f}x</b> the single-stream rate, so '
-                       f'there is real headroom in running more than one caller.')
+            cap = (f'{deepest["parallel"]} streams deliver <b>{gain:.2f}x</b> the aggregate '
+                   f'of one. Batching is where this hardware pays off.')
+        failed = sum(c.get("failed") or 0 for c in cc)
+        if failed:
+            cap += f' {failed} request(s) failed and are not in these figures.'
         parts.append(
-            '<div class="panel"><div class="ptitle">Concurrency</div>'
-            f'<p class="lede">Aggregate throughput as more people use the box at once. '
-            f'{verdict}</p>'
-            + bars(agg, "aggregate tok/s", colour=C["cool"])
-            + "</div>")
+            '<div class="panel"><div class="ptitle">More than one caller at once</div>'
+            '<p class="lede">Every stream added together, against what each single caller '
+            'saw, at each level.</p>'
+            + grouped_bars(groups, [("aggregate", C["cool"]), ("per stream", C["copper"])])
+            + caption(cap) + "</div>")
 
     # --- reasoning -------------------------------------------------------
     if th.get("on") and th.get("off"):
-        rows = [("thinking off", th["off"].get("out_tokens", 0),
-                 f'{th["off"].get("wall_s", 0):.1f}s'),
-                ("thinking on", th["on"].get("out_tokens", 0),
-                 f'{th["on"].get("wall_s", 0):.1f}s')]
+        off, on = th["off"], th["on"]
+        rows = [("thinking off", off.get("wall_s") or 0,
+                 f'{off.get("out_tokens", 0):,} tokens'),
+                ("thinking on", on.get("wall_s") or 0,
+                 f'{on.get("out_tokens", 0):,} tokens')]
+        extra = (on.get("out_tokens", 0) - off.get("out_tokens", 0))
+        secs = (on.get("wall_s") or 0) - (off.get("wall_s") or 0)
+        cap = (f'Reasoning added <b>{secs:.1f}s</b> and {extra:,} tokens to the same '
+               f'question. At {(on.get("decode_tok_s") or 0):.0f} tok/s that is the '
+               f'model thinking rather than the box slowing down: the decode rate barely '
+               f'moved, {(off.get("decode_tok_s") or 0):.0f} against '
+               f'{(on.get("decode_tok_s") or 0):.0f} tok/s.')
         parts.append(
-            '<div class="panel"><div class="ptitle">Reasoning cost</div>'
+            '<div class="panel"><div class="ptitle">What reasoning costs</div>'
             '<p class="lede">The same question asked twice. Hidden reasoning tokens are '
-            'billed in wall time whether or not anyone reads them.</p>'
-            + bars(rows, "tokens generated")
+            'paid for in wall time whether or not anyone reads them.</p>'
+            + hbars(rows, unit="s", fmt="{:.1f}",
+                    colours={"thinking off": C["steel"], "thinking on": C["copper"]})
+            + caption(cap) + "</div>")
+
+    # --- device telemetry ------------------------------------------------
+    during = s.get("during") or {}
+    after = s.get("telemetry_after") or {}
+    before = s.get("telemetry_before") or {}
+    strip = chips([
+        ("peak NPU", f'{during["npu_util_peak"]:.0f}%' if during.get("npu_util_peak") else None),
+        ("median NPU", f'{during["npu_util_median"]:.0f}%' if during.get("npu_util_median") is not None else None),
+        ("NPU memory at peak",
+         (f'{during["npu_mem_peak_mb"]:,.0f} of '
+          f'{during.get("npu_mem_total_mb") or before.get("npu_mem_total_mb") or 0:,.0f} MB')
+         if during.get("npu_mem_peak_mb") and
+            (during.get("npu_mem_total_mb") or before.get("npu_mem_total_mb"))
+         else (f'{during["npu_mem_peak_mb"]:,.0f} MB'
+               if during.get("npu_mem_peak_mb") else None)),
+        ("CPU after", f'{after["cpu_total_pct"]:.0f}%' if after.get("cpu_total_pct") else None),
+        ("samples", during.get("samples")),
+    ])
+    if strip:
+        parts.append(
+            '<div class="panel"><div class="ptitle">What the device was doing</div>'
+            + strip
+            + caption('Sampled on a separate thread <b>while the long generation ran</b>, '
+                      'not before or after it. A reading taken once the request has '
+                      'returned always catches the box going idle and says nothing.')
             + "</div>")
 
     parts.append("</section>")
     return "".join(parts)
 
 
-def comparison(runs):
-    """Only drawn when there is something to compare. One model against itself
-    is not a chart."""
-    have = [(short(r["model"]), ((r["results"].get("sustained") or {}).get("run") or {})
-             .get("decode_tok_s"), r["label"]) for r in runs]
-    have = [(n, v, l) for n, v, l in have if v]
-    if len(have) < 2:
+def multi_line(series, xlabel, ylabel, w=880, h=340, logx=True, fmt="{:.0f}"):
+    """series: [(name, [(x, y), ...], colour)]. Many models on one axis.
+
+    Direct point labels stop working past about three lines, so this one leans
+    on the shared legend above it and labels only the axis. The line is the
+    shape; the table underneath is for reading exact values off.
+    """
+    pts = [p for _, ps, _ in series for p in ps]
+    if not pts:
         return ""
-    have.sort(key=lambda x: -x[1])
-    rows = [(n, v, l) for n, v, l in have]
-    return ('<section class="panel wide" id="compare">'
-            '<div class="ptitle">Sustained decode, every run side by side</div>'
-            '<p class="lede">One long unbroken generation per model, same prompt, same box. '
-            'This is the number that decides whether something feels instant.</p>'
-            + bars(rows, "tok/s", w=880, h=300)
-            + "</section>")
+    pad_l, pad_r, pad_t, pad_b = 62, 22, 22, 42
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, x1 = (math.log10(max(min(xs), 1)), math.log10(max(max(xs), 10))) if logx \
+        else (min(xs), max(xs))
+    y1 = max(ys) * 1.14 or 1
+
+    def px(x):
+        return _scale(math.log10(max(x, 1)) if logx else x, x0, x1, pad_l, w - pad_r)
+
+    def py(y):
+        return _scale(y, 0, y1, h - pad_b, pad_t)
+
+    o = [f'<svg viewBox="0 0 {w} {h}" class="chart" role="img" '
+         f'aria-label="{html.escape(ylabel)} against {html.escape(xlabel)}, every model">']
+    for i in range(5):
+        y = y1 * i / 4
+        o.append(f'<line x1="{pad_l}" y1="{py(y):.1f}" x2="{w-pad_r}" y2="{py(y):.1f}" '
+                 f'stroke="{C["line"]}" stroke-width="1"/>')
+        o.append(f'<text x="{pad_l-9}" y="{py(y)+4:.1f}" text-anchor="end" '
+                 f'class="tick">{fmt.format(y)}</text>')
+    for name, ps, col in series:
+        ps = sorted(ps)
+        if not ps:
+            continue
+        d = " ".join(f"{'M' if i == 0 else 'L'}{px(x):.1f},{py(y):.1f}"
+                     for i, (x, y) in enumerate(ps))
+        o.append(f'<path d="{d}" fill="none" stroke="{col}" stroke-width="2" '
+                 f'stroke-linejoin="round" stroke-linecap="round" opacity=".92"/>')
+        for x, y in ps:
+            o.append(f'<circle cx="{px(x):.1f}" cy="{py(y):.1f}" r="2.6" '
+                     f'fill="{col}"/>')
+    # A dozen models asked for a dozen slightly different prompt lengths, so a
+    # tick per distinct value is a smear of overlapping numbers. Keep the ones
+    # that are far enough apart to read and drop the rest; the table under the
+    # chart is where exact values are read anyway.
+    last = -1e9
+    for x in sorted({p[0] for p in pts}):
+        at = px(x)
+        if at - last < 54:
+            continue
+        last = at
+        o.append(f'<text x="{at:.1f}" y="{h-pad_b+20:.1f}" text-anchor="middle" '
+                 f'class="tick">{x:,.0f}</text>')
+    o.append(f'<text x="{pad_l}" y="{h-6}" class="axis">{html.escape(xlabel)}</text>')
+    o.append(f'<text x="{pad_l}" y="14" class="axis">{html.escape(ylabel)}</text>')
+    o.append("</svg>")
+    return "".join(o)
+
+
+def newest_per_model(runs):
+    """One run per model, the newest, which is what the box does now.
+
+    Best-of would flatter the box, and this whole report exists because spec
+    sheets flatter. A model whose newest run is a partial is plotted with what
+    it has and says so, rather than reaching back for a fuller old one.
+    """
+    best = {}
+    for r in runs:
+        m = r.get("model")
+        if not m:
+            continue
+        if m not in best or (r.get("stamp") or "") > (best[m].get("stamp") or ""):
+            best[m] = r
+    return [best[m] for m in sorted(best)]
+
+
+def cross_model(runs, cat=None):
+    """Every model on one axis, four ways, with one legend for the section."""
+    picks = newest_per_model(runs)
+    if len(picks) < 2:
+        return ""
+    ids = [r["model"] for r in picks]
+    colours = model_colours(ids)
+    meta = {m.get("id"): m for m in (cat or [])}
+    stamps = sorted({r["stamp"][:8] for r in picks})
+    labels = sorted({r["label"] for r in picks})
+    when = stamps[0] if len(stamps) == 1 else f"{stamps[0]} to {stamps[-1]}"
+    runword = labels[0] if len(labels) == 1 else f"{len(labels)} runs"
+
+    drawn = set()
+    out = []
+
+    # 1. sustained decode, horizontally, which is also what fixes the labels
+    rows = []
+    for r in picks:
+        v = ((r["results"].get("sustained") or {}).get("run") or {}).get("decode_tok_s")
+        if v:
+            npu = r.get("npu_usage") or (meta.get(r["model"]) or {}).get("npu_usage")
+            rows.append((short(r["model"]), v, f'{npu}u' if npu else ""))
+            drawn.add(r["model"])
+    if len(rows) > 1:
+        rows.sort(key=lambda x: -x[1])
+        by_short = {short(m): colours[m] for m in ids}
+        top, bottom = rows[0], rows[-1]
+        out.append(
+            '<div class="panel wide"><div class="ptitle">Sustained decode</div>'
+            '<p class="lede">One unbroken generation each, same prompt, same box. This is '
+            'the number that decides whether something feels instant.</p>'
+            + hbars(rows, w=880, unit=" tok/s", fmt="{:.1f}", colours=by_short)
+            + caption(f'<b>{html.escape(top[0])}</b> leads at {top[1]:.1f} tok/s, '
+                      f'{top[1]/bottom[1]:.1f}x the slowest measured, '
+                      f'{html.escape(bottom[0])} at {bottom[1]:.1f}. Every one of these is '
+                      f'a single stream on an idle box.')
+            + "</div>")
+
+    # 2. tokens per second per NPU unit: the efficiency question
+    eff = []
+    for r in picks:
+        v = ((r["results"].get("sustained") or {}).get("run") or {}).get("decode_tok_s")
+        npu = r.get("npu_usage") or (meta.get(r["model"]) or {}).get("npu_usage")
+        if v and npu:
+            eff.append((short(r["model"]), v / npu, f'{v:.0f} tok/s on {npu}u'))
+            drawn.add(r["model"])
+    if len(eff) > 1:
+        eff.sort(key=lambda x: -x[1])
+        by_short = {short(m): colours[m] for m in ids}
+        best, worst = eff[0], eff[-1]
+        out.append(
+            '<div class="panel wide"><div class="ptitle">Throughput per NPU unit</div>'
+            '<p class="lede">The box has 100 NPU units and a loaded model holds its share '
+            'of them for as long as it is resident. This is what each one returns for what '
+            'it occupies, which is the question that decides what to keep loaded.</p>'
+            + hbars(eff, w=880, unit=" tok/s per unit", fmt="{:.2f}", colours=by_short)
+            + caption(f'<b>{html.escape(best[0])}</b> returns {best[1]:.2f} tok/s for every '
+                      f'unit it holds, {best[1]/worst[1]:.1f}x what '
+                      f'{html.escape(worst[0])} returns for the units it holds. A model at '
+                      f'the top of the previous chart and the bottom of this one is fast '
+                      f'and expensive to keep resident.')
+            + "</div>")
+
+    # 3. prefill curves, all models on one axis
+    series = []
+    for r in picks:
+        pf = [(p["prompt_tokens"], p["prefill_tok_s"])
+              for p in (r["results"].get("prefill") or [])
+              if p.get("prefill_tok_s") and p.get("prompt_tokens")]
+        if len(pf) > 1:
+            series.append((short(r["model"]), pf, colours[r["model"]]))
+            drawn.add(r["model"])
+    if len(series) > 1:
+        tops = [(n, max(y for _, y in ps)) for n, ps, _ in series]
+        tops.sort(key=lambda x: -x[1])
+        out.append(
+            '<div class="panel wide"><div class="ptitle">Prefill, every model</div>'
+            '<p class="lede">How fast each model reads a prompt, at four lengths. The x '
+            'axis is logarithmic because the prompts are.</p>'
+            + multi_line(series, "prompt tokens", "prefill tok/s")
+            + caption(f'<b>{html.escape(tops[0][0])}</b> reads fastest at its best length, '
+                      f'{tops[0][1]:,.0f} tok/s, against {tops[-1][1]:,.0f} for '
+                      f'{html.escape(tops[-1][0])}. A line that climbs to the right is a '
+                      f'model that gets cheaper per token as the prompt grows.')
+            + "</div>")
+
+    # 4. aggregate throughput against stream count, all models
+    cser = []
+    for r in picks:
+        cc = [(c["parallel"], c["aggregate_tok_s"])
+              for c in (r["results"].get("concurrency") or [])
+              if c.get("aggregate_tok_s")]
+        if len(cc) > 1:
+            cser.append((short(r["model"]), cc, colours[r["model"]]))
+            drawn.add(r["model"])
+    if len(cser) > 1:
+        gains = []
+        for n, cc, _ in cser:
+            cc = sorted(cc)
+            if cc[0][1]:
+                gains.append((n, max(y for _, y in cc) / cc[0][1]))
+        gains.sort(key=lambda x: -x[1])
+        flat = sum(1 for _, g in gains if g < 1.25)
+        verdict = (f'All {len(gains)} of them are flat, the best managing '
+                   f'{gains[0][1]:.2f}x at its deepest level. '
+                   if flat == len(gains) else
+                   f'{flat} of {len(gains)} are flat; the best, '
+                   f'<b>{html.escape(gains[0][0])}</b>, reaches {gains[0][1]:.2f}x. ')
+        out.append(
+            '<div class="panel wide"><div class="ptitle">Aggregate throughput against '
+            'stream count</div>'
+            '<p class="lede">Every caller added together as more of them arrive at once. '
+            'A line that climbs is a box that batches; a flat line is a box that queues.</p>'
+            + multi_line(cser, "streams at once", "aggregate tok/s", logx=False)
+            + caption(verdict + 'This is one accelerator serving one sequence at a time, so '
+                      'a second caller waits rather than shares. It is the single most '
+                      'important thing to know before putting a Tiiny behind anything with '
+                      'more than one user.')
+            + "</div>")
+
+    if not out:
+        return ""
+    head = ['<section class="cross" id="compare">',
+            '<h2>Every model, side by side</h2>',
+            f'<p class="lede">The newest run for each of the {len(drawn)} models with '
+            f'something to compare, not the best run: this is what the box does now. '
+            f'Colour is the same for a given model in every chart below. Run '
+            f'<b>{html.escape(runword)}</b>, {html.escape(when)}.</p>',
+            legend(sorted(drawn), colours)]
+    return "".join(head + out + ["</section>"])
 
 
 def catalog_table(cat):
@@ -338,6 +864,156 @@ def catalog_table(cat):
         f'<tbody>{"".join(rows)}</tbody></table></div></section>')
 
 
+# ------------------------------------------------------------- markdown
+# The same data, rendered as text. Not a transcription of the HTML: a chart
+# becomes the table it was drawn from, because ASCII art of a line chart is
+# worse than the numbers it hides. Everything here reads the result files
+# through the same loader the page does, so the two cannot drift.
+
+def _md_table(head, rows):
+    out = ["| " + " | ".join(head) + " |",
+           "|" + "|".join("---" for _ in head) + "|"]
+    for r in rows:
+        out.append("| " + " | ".join(str(c) for c in r) + " |")
+    return "\n".join(out)
+
+
+def markdown(outdir: pathlib.Path, cat=None) -> str:
+    runs = load(outdir)
+    if not runs:
+        return "# TiinyBench\n\nNo results yet. Run `tiiny-bench --label first-run`.\n"
+    picks = newest_per_model(runs)
+    newest = max(runs, key=lambda r: r["stamp"])
+    meta = {m.get("id"): m for m in (cat or [])}
+    L = ["# TiinyBench",
+         "",
+         "An independent measurement of what a Tiiny Pocket Lab actually does, as "
+         "opposed to what a spec sheet says it does.",
+         "",
+         f"- runs: {len(runs)}",
+         f"- models: {len({r['model'] for r in runs if r.get('model')})}",
+         f"- latest: {newest['stamp']}"]
+    if newest.get("build"):
+        L.append(f"- firmware: {newest['build']}")
+    L += ["", "Every number below was measured on one Tiiny Pocket Lab. Nothing here is "
+              "quoted from a datasheet and nothing is an average across devices.", ""]
+
+    # ---- cross-model ---------------------------------------------------
+    rows = []
+    for r in picks:
+        v = ((r["results"].get("sustained") or {}).get("run") or {}).get("decode_tok_s")
+        npu = r.get("npu_usage") or (meta.get(r["model"]) or {}).get("npu_usage")
+        if v:
+            rows.append((short(r["model"]), f"{v:.1f}", npu or "-",
+                         f"{v / npu:.2f}" if npu else "-", r["stamp"][:8]))
+    if len(rows) > 1:
+        rows.sort(key=lambda x: -float(x[1]))
+        L += ["## Every model, side by side", "",
+              "The newest run for each model, not the best one.", "",
+              _md_table(["model", "sustained tok/s", "NPU units",
+                         "tok/s per unit", "measured"], rows), ""]
+
+    # ---- per model -----------------------------------------------------
+    L += ["## Every run", "", "Newest first.", ""]
+    for r in sorted(runs, key=lambda x: x["stamp"], reverse=True):
+        res = r.get("results") or {}
+        L.append(f"### {short(r['model'])}")
+        L.append("")
+        bits = [x for x in (r.get("type"), r.get("params") and f"{r['params']} params",
+                            r.get("npu_usage") and f"{r['npu_usage']} of 100 NPU units",
+                            r.get("total_size") and f"{r['total_size'] / 1e9:.1f} GB")
+                if x]
+        L.append("`" + r["model"] + "`")
+        L.append("")
+        if bits:
+            L.append(" · ".join(str(b) for b in bits))
+            L.append("")
+        stamp = [f"run {r['label']}", r["stamp"]]
+        if r.get("build"):
+            stamp.append(f"TiinyOS {r['build']}")
+        L.append("*" + ", ".join(stamp) + ", on a Tiiny Pocket Lab.*")
+        L.append("")
+
+        pf = [p for p in (res.get("prefill") or []) if p.get("prompt_tokens")]
+        if pf:
+            L += ["**Prefill against prompt length**", "",
+                  _md_table(["prompt tokens", "time to first token", "prefill tok/s",
+                             "decode tok/s"],
+                            [(f'{p["prompt_tokens"]:,}', f'{p.get("ttft_s", 0):.2f} s',
+                              f'{p.get("prefill_tok_s", 0):,.0f}',
+                              f'{p.get("decode_tok_s", 0):.1f}')
+                             for p in sorted(pf, key=lambda p: p["prompt_tokens"])]), ""]
+        srun = (res.get("sustained") or {}).get("run") or {}
+        if srun.get("decode_tok_s"):
+            L += ["**Sustained generation**", "",
+                  f'{srun.get("out_tokens", 0):,} tokens unbroken at '
+                  f'{srun["decode_tok_s"]:.1f} tok/s, first token after '
+                  f'{srun.get("ttft_s", 0):.2f} s, {srun.get("wall_s", 0):.1f} s of wall '
+                  f'clock.', ""]
+        during = (res.get("sustained") or {}).get("during") or {}
+        if during.get("npu_util_peak"):
+            L += [f'NPU peaked at {during["npu_util_peak"]:.0f}% and held a median of '
+                  f'{during.get("npu_util_median", 0):.0f}% across '
+                  f'{during.get("samples", 0)} samples taken while the generation ran, '
+                  f'with {during.get("npu_mem_peak_mb", 0):,.0f} MB resident at peak.', ""]
+        cc = res.get("concurrency") or []
+        if cc:
+            L += ["**More than one caller at once**", "",
+                  _md_table(["streams", "aggregate tok/s", "per stream tok/s", "wall",
+                             "ok", "failed"],
+                            [(c["parallel"], f'{c["aggregate_tok_s"]:.1f}',
+                              f'{c["per_stream_tok_s"]:.1f}', f'{c["wall_s"]:.1f} s',
+                              c.get("ok", "-"), c.get("failed", 0)) for c in cc]), ""]
+            one = cc[0]["aggregate_tok_s"] or 0
+            best = max(c["aggregate_tok_s"] for c in cc)
+            if one:
+                gain = best / one
+                L += [f'Deepest level returns {gain:.2f}x the aggregate of one stream. '
+                      + ("The box is queueing, not batching." if gain < 1.25
+                         else "There is real headroom in running more than one caller."),
+                      ""]
+        th = res.get("thinking") or {}
+        if th.get("on") and th.get("off"):
+            L += ["**What reasoning costs**", "",
+                  _md_table(["", "wall", "output tokens", "decode tok/s",
+                             "time to first token"],
+                            [(k, f'{th[k].get("wall_s", 0):.1f} s',
+                              f'{th[k].get("out_tokens", 0):,}',
+                              f'{th[k].get("decode_tok_s", 0):.1f}',
+                              f'{th[k].get("ttft_s", 0):.2f} s') for k in ("off", "on")]), ""]
+        for key, title, unit in (("image", "Illustration", "s_per_image"),
+                                 ("speech", "Speech", "rtf"),
+                                 ("embed", "Embeddings", "emb_per_s"),
+                                 ("asr", "Transcription", "rtf"),
+                                 ("ocr", "Page reading", "s_per_page"),
+                                 ("music", "Music", "audio_per_s"),
+                                 ("rerank", "Reranking", "pairs_per_s")):
+            blk = res.get(key) or {}
+            if blk.get(unit) is not None:
+                L += [f"**{title}**", "",
+                      f"{unit.replace('_', ' ')}: {blk[unit]}", ""]
+
+    L += ["## How it is measured", "",
+          "- **Prefill.** The same deterministic filler repeated to four lengths, each "
+          "asked for a four-token answer so decode barely registers.",
+          "- **Sustained.** One unbroken 1500-token generation, with NPU utilisation "
+          "sampled on a separate thread while it runs rather than after it.",
+          "- **Concurrency.** 1, 2, 4 and 8 identical requests fired at once from "
+          "separate threads.",
+          "- **Reasoning.** One arithmetic word problem, asked with thinking off and "
+          "then on. The ratio is wall time.",
+          "",
+          "No quality evaluation of any kind. Nothing here says a model is good, only "
+          "how fast it is.", ""]
+    stale = [r for r in runs if (r.get("stamp") or "") < "20260919"]
+    if stale:
+        L += [f"*The `bench_version` field on the {len(stale)} runs measured before "
+              "2026-09-19 is not reliable: the version constant was not bumped for two "
+              "releases, so files written by 0.1.5 and 0.1.6 are stamped 0.1.4. The "
+              "measurements themselves are unaffected.*", ""]
+    return "\n".join(L)
+
+
 # -------------------------------------------------------------------- css
 # The tokens are generated from C so the palette lives in exactly one place.
 # The rest of the sheet is a plain literal - it is full of percentages, and
@@ -349,6 +1025,85 @@ TOKENS = (":root{"
           + "--pad:clamp(20px,4vw,64px);}")
 
 CSS = TOKENS + """
+/* ---- print, which is also how a PDF is made ------------------------
+   No PDF library: the browser has one and it is better than anything that
+   would fit in here. What that needs from the page is a light ground the
+   toner can survive, real page breaks between model blocks, and charts that
+   do not get cut in half at the bottom of a sheet. */
+@media print{
+  @page{margin:14mm 12mm}
+  html,body{background:#fff !important}
+  body{color:#111;padding:0;font-size:10.5pt;
+       background-image:none !important}
+  .wrap{max-width:none}
+  a{color:#111;text-decoration:none}
+  /* Hand the dark palette back as ink on paper. The charts read their
+     colours from these tokens, so redefining them repaints the SVG too. */
+  :root{
+    --ground:#fff; --s1:#fff; --s2:#f6f5f3; --line:#d8d5d0;
+    --steel:#55585e; --ink:#111316;
+  }
+  .top{border:0;padding-top:0}
+  .top h1{font-size:30pt}
+  header.top .tag{max-width:none}
+  /* A model block is two or three sheets tall, so asking print to keep it
+     whole only pushes it onto the next page and leaves its border stretched
+     down a mostly empty one. It starts a page and is then allowed to flow;
+     the panels inside it are the things worth keeping whole. */
+  section.model{break-before:page; page-break-before:always;
+                border:0; border-top:1px solid var(--line); border-radius:0;
+                padding-top:6mm}
+  /* An empty grid cell prints as a grey block, which reads as a missing
+     measurement rather than as a gap in the layout. */
+  .stats{background:none !important}
+  .stats>*{break-inside:avoid; page-break-inside:avoid}
+  /* :first-of-type would look for the first <section> on the page, which is
+     the cross-model one, so it never matched and the first model block got a
+     page break that left its own heading stranded on the sheet before. */
+  .runsintro + section.model{break-before:auto; page-break-before:auto}
+  .runsintro{break-after:avoid; page-break-after:avoid}
+  .cross{break-after:page; page-break-after:always}
+  .panel{break-inside:avoid-page; page-break-inside:avoid}
+  .chart{break-inside:avoid; page-break-inside:avoid; max-width:100%}
+  .stats{break-inside:avoid; page-break-inside:avoid}
+  table{break-inside:auto}
+  tr{break-inside:avoid; page-break-inside:avoid}
+  thead{display:table-header-group}
+  /* A horizontally scrolling box prints as a clipped column, so on paper it
+     stops scrolling and wraps its own way. */
+  .tablewrap{overflow:visible !important}
+  h2,h3{break-after:avoid; page-break-after:avoid}
+  .legend{break-inside:avoid; page-break-inside:avoid}
+  footer{break-before:avoid}
+  .noprint{display:none !important}
+}
+
+/* ---- added for the rebuilt report ---------------------------------- */
+.mtop{display:flex;align-items:center;gap:10px}
+.mtop h3{margin:0}
+.dot{width:11px;height:11px;border-radius:50%;flex:none;display:inline-block}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.pill{font-size:11.5px;letter-spacing:.02em;color:var(--steel);background:var(--s2);
+  border:1px solid var(--line);border-radius:999px;padding:2px 10px;white-space:nowrap}
+.msrc{font-size:11.5px;color:var(--steel);opacity:.75;margin-top:6px}
+.cap{font-size:13.5px;color:var(--steel);line-height:1.6;margin:10px 0 0;
+  border-left:2px solid var(--line);padding-left:12px;max-width:74ch}
+.cap b{color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 2px}
+.chip{background:var(--s2);border:1px solid var(--line);border-radius:6px;
+  padding:8px 12px;display:flex;flex-direction:column;gap:2px;min-width:96px}
+.chip b{font-size:17px;color:var(--ink);font-weight:600;letter-spacing:-.02em}
+.chip span{font-size:11px;color:var(--steel);letter-spacing:.04em}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:14px 0 20px;
+  padding:12px 14px;background:var(--s1);border:1px solid var(--line);border-radius:8px}
+.lgt{width:100%;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--steel)}
+.lg{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--steel);
+  white-space:nowrap}
+.lg i{width:10px;height:10px;border-radius:2px;flex:none;display:inline-block}
+.hlab{fill:var(--ink);font-size:12px}
+.cross{margin:0 0 56px}
+.cross h2{margin-bottom:6px}
+
 *{box-sizing:border-box;margin:0;padding:0}
 html{background:var(--ground)}
 body{
@@ -487,12 +1242,13 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
            if newest.get("build") else "")
         + '</div></header>')
 
-    body.append(comparison(runs))
+    body.append(cross_model(runs, cat))
+    colours = model_colours([r.get("model") for r in runs if r.get("model")])
     body.append('<div class="runsintro"><h2>Every run</h2>'
                 '<p class="lede">Newest first. Each block is one model on one day, with the '
                 'numbers exactly as the device reported them.</p></div>')
     for i, r in enumerate(sorted(runs, key=lambda r: r["stamp"], reverse=True)):
-        body.append(model_section(r, i))
+        body.append(model_section(r, i, colours.get(r.get("model"))))
 
     body.append(catalog_table(cat))
 
@@ -526,6 +1282,13 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
     foot.append(f'<span>{html.escape(newest["stamp"])}</span></footer>')
     body.append("".join(foot))
 
+    # Opened with ?print=1 from the app's Save PDF button, the report prints
+    # itself once it has painted. Nothing else on the page needs script, and
+    # this does not either: without it the page is just a page.
+    body.append(
+        "<script>if(location.search.indexOf('print=1')>=0){"
+        "addEventListener('load',function(){setTimeout(function(){print();},250);});"
+        "}</script>")
     body.append("</div></body></html>")
     dest.write_text("".join(body), encoding="utf-8")
     return dest

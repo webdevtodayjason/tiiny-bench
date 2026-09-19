@@ -293,6 +293,15 @@ HEADLINE = sorted({(bench.CLASS_METRIC[c][0], names[0])
                    if len(names) == 1 and c in bench.CLASS_METRIC})
 
 
+def _catalog_quietly():
+    """The installed catalogue, or nothing. An export must not fail because
+    the box is asleep; the report degrades to what the result files hold."""
+    try:
+        return bench.catalog(bench.key())
+    except (Exception, SystemExit):  # noqa: BLE001
+        return None
+
+
 def leaderboard():
     """Best measured figures per model, grouped by what kind of model it is.
 
@@ -695,6 +704,29 @@ class Handler(BaseHTTPRequestHandler):
                 import report
                 report.build(bench.OUT, r)
             return self._file(r, "text/html; charset=utf-8")
+        if p in ("/report.html", "/report.md"):
+            # The HTML export is the same file, handed over as a download
+            # rather than regenerated: it is already self-contained, and a
+            # second generator is a second thing that can disagree with the
+            # first. Markdown comes off the same loader for the same reason.
+            import report
+            stamp = time.strftime("%Y%m%d")
+            if p == "/report.md":
+                body = report.markdown(bench.OUT, _catalog_quietly()).encode("utf-8")
+                ctype = "text/markdown; charset=utf-8"
+            else:
+                r = HERE / "report.html"
+                report.build(bench.OUT, r, _catalog_quietly())
+                body = r.read_bytes()
+                ctype = "text/html; charset=utf-8"
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Disposition",
+                             'attachment; filename="tiinybench-%s%s"'
+                             % (stamp, ".md" if p.endswith(".md") else ".html"))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
         if p == "/api/state":
             return self._json(S.snapshot())
         if p == "/api/device":

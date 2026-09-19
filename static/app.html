@@ -172,10 +172,11 @@ button.go{background:var(--orange);border:0;color:#160d05;font:inherit;font-weig
 button.go:hover{filter:brightness(1.1)}
 button.go:active{transform:translateY(1px)}
 button.go[disabled]{opacity:.35;cursor:not-allowed;filter:none;transform:none}
-button.ghost{background:var(--s2);border:1px solid var(--line2);color:var(--steel);font:inherit;
+button.ghost,a.ghost{background:var(--s2);border:1px solid var(--line2);color:var(--steel);font:inherit;
   font-size:12.5px;padding:9px 15px;border-radius:5px;cursor:pointer;
   transition:border-color .13s,color .13s}
-button.ghost:hover{border-color:var(--steel);color:var(--ink)}
+button.ghost:hover,a.ghost:hover{border-color:var(--steel);color:var(--ink)}
+a.ghost{text-decoration:none;display:inline-flex;align-items:center}
 button.danger{border-color:#6b2f28;color:var(--bad)}
 
 /* ---- wizard --------------------------------------------------------- */
@@ -788,7 +789,13 @@ label.lab{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var
     <p>One self-contained HTML file built from every run. No CDN, no webfont, no JavaScript
        needed to read it. Works offline and you can email it.</p></div>
     <div class="right"><button class="ghost" id="rebuild">Rebuild</button>
+      <a class="ghost" id="dlhtml" href="/report.html" download>Save HTML</a>
+      <a class="ghost" id="dlmd" href="/report.md" download>Save Markdown</a>
+      <button class="ghost" id="dlpdf">Save PDF</button>
       <button class="go" id="openreport">Open in a tab</button></div></div>
+  <p class="note" style="margin:-6px 0 14px">Saving as PDF opens the report in a tab and
+    asks the browser to print it. Choose <b>Save as PDF</b> as the destination, and leave
+    background graphics on if you want the charts to keep their colour.</p>
   <div class="card"><iframe id="rframe" src="/report" style="width:100%;height:76vh;border:0;
     border-radius:7px;background:#0b0c0e" title="Benchmark report"></iframe></div>
 </section>
@@ -1541,6 +1548,14 @@ function wire(k){
   };
 }
 $('viewreport').addEventListener('click', function(){ go('report'); });
+/* PDF is the browser's own print, because a PDF library is a dependency this
+   app will not take and the report already has a print stylesheet. Printing
+   the iframe directly prints the app around it, so the report is opened on its
+   own and asked to print itself once it has loaded. */
+$('dlpdf').addEventListener('click', function(){
+  var w = window.open('/report?print=1', '_blank');
+  if (!w) { alert('Allow pop-ups for this page, or open the report in a tab and print it.'); }
+});
 
 /* ---- report --------------------------------------------------------- */
 $('rebuild').addEventListener('click', function(){
