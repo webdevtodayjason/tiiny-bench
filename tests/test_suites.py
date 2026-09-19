@@ -651,6 +651,27 @@ class TestSpeechVoiceMode(DeviceCase):
         out = bench.t_speech(bench.key(), TTS)
         self.assertIn("custom-voice", out["not_measured"])
 
+    def test_a_model_that_names_its_speakers_is_measured_with_one(self):
+        """Supertone answers 500 with the list of speakers it has. Reading it
+        is the device handing over the answer, not a guess."""
+        self.state.speech_speakers = ["F1", "F2", "M1"]
+        out = bench.t_speech(bench.key(), TTS)
+        self.assertEqual(out["voice"], "F1")
+        self.assertEqual(len(out["runs"]), 3)
+        self.assertGreater(out["rtf"], 0)
+
+    def test_it_reads_the_speaker_list_out_of_the_real_refusal(self):
+        body = ('{"error":{"message":"Unsupported speaker: serena. Supported '
+                "speakers: ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', "
+                '\'M4\', \'M5\']","type":"INVALID_REQUEST"}}')
+        self.assertEqual(bench._offered_voices({"_body": body}),
+                         ["F1", "F2", "F3", "F4", "F5",
+                          "M1", "M2", "M3", "M4", "M5"])
+
+    def test_a_refusal_that_names_nothing_offers_nothing(self):
+        self.assertEqual(bench._offered_voices(
+            {"_body": '{"error":{"message":"custom_voice is not supported"}}'}), [])
+
     def test_a_refusal_about_something_else_is_not_read_as_a_voice_problem(self):
         self.assertFalse(bench._voice_mode_refused(
             {"_status": 500, "_body": '{"error":{"message":"out of memory"}}'}))

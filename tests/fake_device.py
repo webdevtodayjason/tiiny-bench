@@ -172,6 +172,7 @@ class FakeState:
         self.music_async = False
         # CustomVoice takes the plain body; its two siblings answer 500.
         self.speech_needs_voice = False
+        self.speech_speakers = None
         self.music_sessions = {}
         # What the added routes actually received, so a test can prove the
         # client sent real work rather than a well-formed empty request.
@@ -482,9 +483,18 @@ class FakeHandler(BaseHTTPRequestHandler):
         accepted. SPEECH_SPEED is characters of text per second of audio."""
         if not self._have("Text-to-Speech"):
             return self._send(503, NOT_LOADED)
-        if self.state.speech_needs_voice:
+        if self.state.speech_speakers is not None:
+            # Supertone: the route reaches for a speaker the model does not
+            # have, and the refusal lists the ones it does.
+            voice = body.get("voice")
+            if voice not in self.state.speech_speakers:
+                return self._send(500, {"error": {
+                    "message": "Unsupported speaker: %s. Supported speakers: %r"
+                               % (voice or "serena", self.state.speech_speakers),
+                    "type": "INVALID_REQUEST"}})
+        elif self.state.speech_needs_voice:
             # The Base and VoiceDesign variants: the route reaches for a
-            # custom voice and the model has no such mode.
+            # custom voice and the model has no such mode, and names nothing.
             return self._send(500, {"error": {
                 "message": "custom_voice is not supported by this model",
                 "type": "unsupported_capability"}})

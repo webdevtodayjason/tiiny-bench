@@ -1671,7 +1671,25 @@ def _voice_mode_refused(v):
     if not isinstance(v, dict):
         return False
     blob = (str(v.get("_body") or "") + str(v.get("_error") or "")).lower()
-    return "voice" in blob and ("not supported" in blob or "unsupported" in blob)
+    return (("voice" in blob or "speaker" in blob)
+            and ("not supported" in blob or "unsupported" in blob))
+
+
+def _offered_voices(v):
+    """The speaker names a refusal lists, when it lists any.
+
+    Supertone answers 500 "Unsupported speaker: serena. Supported speakers:
+    ['F1', 'F2', ...]", which is the device handing over the answer. Reading
+    it is not guessing; the Qwen variants name no alternatives and get none
+    invented for them.
+    """
+    if not isinstance(v, dict):
+        return []
+    blob = str(v.get("_body") or "")
+    m = re.search(r"[Ss]upported (?:speakers?|voices?)[^\[]*\[([^\]]*)\]", blob)
+    if not m:
+        return []
+    return [x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()]
 
 
 def t_speech(tok, model):
@@ -1679,18 +1697,30 @@ def t_speech(tok, model):
     Above 1.0 means it can talk faster than a person listens, which is the only
     threshold that matters for anything conversational."""
     say("\n  SPEECH  (real-time factor)")
-    rows = []
+    rows, voice = [], None
     for i, text in enumerate(SPEECH_TEXTS):
         body = {"model": model, "input": text, "response_format": "wav"}
+        if voice:
+            body["voice"] = voice
         t0 = time.time()
         raw = api_raw(gw("/v1/audio/speech"), tok, body, timeout=300)
-        if _voice_mode_refused(raw):
-            capture("speech", gw("/v1/audio/speech"), raw)
-            say("    this model does not implement the voice mode the speech "
-                "route defaults to")
-            return not_measured(
-                "the speech route defaults to a custom-voice mode this model "
-                "does not implement, and it answered 500 rather than audio")
+        if _voice_mode_refused(raw) and voice is None:
+            offered = _offered_voices(raw)
+            if offered:
+                voice = offered[0]
+                say(f"    this model names its speakers; using {voice} "
+                    f"of {len(offered)}")
+                t0 = time.time()
+                raw = api_raw(gw("/v1/audio/speech"), tok,
+                              dict(body, voice=voice), timeout=300)
+            else:
+                capture("speech", gw("/v1/audio/speech"), raw)
+                say("    this model does not implement the voice mode the "
+                    "speech route defaults to, and names no alternative")
+                return not_measured(
+                    "the speech route defaults to a custom-voice mode this "
+                    "model does not implement, and it answered 500 rather "
+                    "than audio")
         wall = time.time() - t0
         wav = _as_wav(raw)
         if not wav:
@@ -1708,7 +1738,7 @@ def t_speech(tok, model):
         say(f"    median {statistics.median(good):.2f}x real time")
     if not rows:
         return None
-    return {"runs": rows,
+    return {"runs": rows, "voice": voice,
             "rtf": round(statistics.median(good), 2) if good else None}
 
 
