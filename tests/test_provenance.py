@@ -16,6 +16,7 @@ measurement; neither is true of a thing nobody could measure.
 """
 import json
 import os
+import re
 import pathlib
 import sys
 import unittest
@@ -248,3 +249,36 @@ class TestOlderFilesStillWork(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BothWritersAgree(unittest.TestCase):
+    """The terminal and the web app each build their own result record, and
+    for one release the web app's was missing the provenance envelope: a
+    three-hour sweep driven from the browser could not say which OS, which
+    Python or which commit measured it, while a one-model run from the
+    terminal could. Nothing failed, because every test asked one writer or
+    the other and never asked whether they matched.
+
+    Read both source files rather than run a sweep: this is a question about
+    the shape of the record, and the shape is visible in the literal.
+    """
+
+    @staticmethod
+    def _keys(path, anchor):
+        src = pathlib.Path(ROOT, path).read_text()
+        i = src.index(anchor)
+        chunk = src[i:i + 1400]
+        # the dict literal ends at the line that closes it
+        end = chunk.index('"models": []}')
+        return set(re.findall(r'"([a-z_]+)":', chunk[:end]))
+
+    def test_the_web_app_records_what_the_terminal_records(self):
+        cli = self._keys("bench.py", '"label": a.label')
+        web = self._keys("serve.py", '"label": label')
+        missing = cli - web
+        self.assertEqual(
+            missing, set(),
+            "the web app's result record is missing %s, which the terminal's "
+            "records; a sweep driven from the browser would be less "
+            "comparable than the same sweep driven from the shell"
+            % sorted(missing))

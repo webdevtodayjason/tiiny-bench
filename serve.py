@@ -130,7 +130,14 @@ def run_suite(label, models, tests):
         rec = {"label": label, "stamp": stamp, "build": info.get("tiiny_os"),
                "host": bench.HOST, "suite_version": 2,
                "bench_version": bench.VERSION,
-               "connection": bench.where(),
+               "connection": dict(bench.where(),
+                                  round_trip=bench.round_trip(tok)),
+               # The same envelope the command line writes. Sweeps driven from
+               # the browser were going out without it, so the file that took
+               # three hours to produce could not say which OS, which Python
+               # or which commit measured it, and the one from the terminal
+               # could. A number without that is not comparable to anyone.
+               "provenance": bench.envelope(tok, cat, info),
                "firmware": bench.firmware(info),
                "models": []}
         path = bench.OUT / f"{stamp}-suite-{label}.json"

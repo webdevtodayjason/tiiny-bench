@@ -708,6 +708,33 @@ def probe_gateway(timeout=3.0):
     return TRANSPORT.get("gateway")
 
 
+def round_trip(tok, n=7):
+    """How long an empty-handed call to the gateway takes, end to end.
+
+    Every measured number on this box includes the trip to it. A benchmark
+    driven from this Mac over the USB tunnel and one driven from a laptop on
+    the LAN are not comparable until the reader knows what that trip costs,
+    and time to first token is where it shows up most. One cheap GET against
+    the same host, port and vhost that inference uses, several times, median
+    reported: the median rather than the mean because the first call after an
+    idle period is always the slow one and it should not set the figure.
+    """
+    ms = []
+    for i in range(n):
+        t0 = time.time()
+        r = api(gw("/api/v1/models/running"), tok, timeout=20)
+        if isinstance(r, dict) and "_error" in r:
+            continue
+        ms.append((time.time() - t0) * 1000)
+    if not ms:
+        return {"probe": "/api/v1/models/running", "n": 0,
+                "note": "the probe call did not answer, so nothing was timed"}
+    ms.sort()
+    return {"probe": "/api/v1/models/running", "n": len(ms),
+            "median_ms": round(statistics.median(ms), 1),
+            "min_ms": round(ms[0], 1), "max_ms": round(ms[-1], 1)}
+
+
 def where():
     """One dict describing the connection, for the UI and the result file."""
     mode = TRANSPORT.get("gateway") or "unknown"
@@ -2740,7 +2767,7 @@ def main():
            # numbers. Two runs of the same box over USB and over the port 80
            # vhost are not the same measurement, and a result that does not say
            # which one it was cannot be compared with anything later.
-           "connection": where(),
+           "connection": dict(where(), round_trip=round_trip(tok)),
            "firmware": firmware(info),
            "models": []}
     path = OUT / f"{stamp}-suite-{a.label}.json"
