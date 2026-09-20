@@ -1503,18 +1503,36 @@ def t_sustained(tok, model, total=1500):
 
     util = [s["npu_util_pct"] for s in samples]
     mem = [s.get("npu_mem_used_mb") or 0 for s in samples]
+    tot = [s.get("npu_mem_total_mb") for s in samples
+           if s.get("npu_mem_total_mb")]
+    # The device's memory_total_mb is not a constant. Sampled every four
+    # seconds on 2026-09-19 it read 7134, 13735, 11152, 12482, 4836, 15025,
+    # 1814, 11167 MB on a box whose physical memory obviously did not change.
+    # The 52-model sweep recorded a peak of 9712 "of" 2497, which is not a
+    # thing that can happen and was printed on a public page. So the total is
+    # only carried when the samples agree on it, and the peak is reported on
+    # its own when they do not.
+    steady = bool(tot) and (max(tot) - min(tot)) <= max(1, min(tot) * 0.02)
     during = {
         "samples": len(samples),
         "npu_util_peak": max(util) if util else None,
         "npu_util_median": round(statistics.median(util), 1) if util else None,
         "npu_mem_peak_mb": max(mem) if mem else None,
-        "npu_mem_total_mb": (samples[0].get("npu_mem_total_mb") if samples
-                             else after.get("npu_mem_total_mb")),
+        "npu_mem_total_mb": (min(tot) if steady else None),
+        "npu_mem_total_unstable": (None if steady else
+                                   {"min": min(tot), "max": max(tot),
+                                    "n": len(tot)} if tot else None),
     }
     say(f"    generated {r['out_tokens']} tokens in {r['wall_s']}s at {r['decode_tok_s']} tok/s")
     say(f"    NPU util while running: median {during['npu_util_median']}% "
           f"peak {during['npu_util_peak']}%  ({during['samples']} samples)")
-    say(f"    NPU mem peak {during['npu_mem_peak_mb']}/{during['npu_mem_total_mb']} MB")
+    if during["npu_mem_total_mb"]:
+        say(f"    NPU mem peak {during['npu_mem_peak_mb']} of "
+            f"{during['npu_mem_total_mb']} MB")
+    else:
+        say(f"    NPU mem peak {during['npu_mem_peak_mb']} MB "
+            f"(the device's reported total moved while measuring, so there "
+            f"is no denominator worth printing)")
     return {"run": r, "telemetry_before": before, "telemetry_after": after,
             "during": during}
 

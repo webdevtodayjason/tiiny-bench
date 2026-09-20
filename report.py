@@ -463,6 +463,75 @@ def points_table(pf):
     return f'<div class="tablewrap"><table><thead>{head}</thead><tbody>{body}</tbody></table></div>'
 
 
+
+
+def _mem_chip(during, before):
+    """Peak NPU memory, with a total only when the total can be believed."""
+    peak = during.get("npu_mem_peak_mb")
+    if not peak:
+        return None
+    total = during.get("npu_mem_total_mb") or before.get("npu_mem_total_mb")
+    if total and total > peak:
+        return f"{peak:,.0f} of {total:,.0f} MB"
+    return f"{peak:,.0f} MB"
+
+
+def conditions_block(runs):
+    """What the numbers were taken under, said plainly and near the top.
+
+    Resident set first, because it is the one that silently invalidates a
+    comparison: a model measured while something else held 94 of the box's
+    100 NPU units is not comparable to one measured on a quiet box, and
+    nothing else on the page would tell you which happened.
+    """
+    newest = max(runs, key=lambda r: r.get("stamp") or "")
+    conn = newest.get("connection") or {}
+    prov = newest.get("provenance") or {}
+    host = prov.get("host") or {}
+    rt = conn.get("round_trip") or {}
+
+    alone = shared = 0
+    for r in runs:
+        res = (r.get("conditions_at_start") or {})
+        n = len(res.get("resident") or [])
+        if n <= 1:
+            alone += 1
+        elif n > 1:
+            shared += 1
+
+    cards = []
+    if alone or shared:
+        if shared == 0:
+            cards.append(stat(f'{alone}<span class="u">of {alone}</span>',
+                              "measured alone",
+                              "nothing else was loaded on the box for any of these"))
+        else:
+            cards.append(stat(f'{shared}<span class="u">of {alone + shared}</span>',
+                              "shared the box",
+                              "those numbers are not comparable with the rest"))
+    if rt.get("median_ms") is not None:
+        cards.append(stat(f'{rt["median_ms"]:.0f}<span class="u">ms</span>',
+                          "round trip to the box",
+                          f'median of {rt.get("n", 0)}, and every number below '
+                          f'includes it'))
+    mode = conn.get("gateway_transport")
+    if mode:
+        cards.append(stat(f'<span class="u">{html.escape(str(mode))}</span>',
+                          "how it was reached",
+                          f'port {conn.get("gateway_port", "?")}'))
+    drv = " ".join(str(host.get(k)) for k in ("os", "arch") if host.get(k))
+    if drv:
+        cards.append(stat(f'<span class="u">{html.escape(drv)}</span>',
+                          "driven from",
+                          f'Python {host.get("python", "?")}'))
+    if not cards:
+        return ""
+    return ('<section class="conds"><h2>What these were taken under</h2>'
+            '<p class="lede">The same model on a busier box, or over a slower '
+            'link, is a different number. This is the part a stranger needs '
+            'before trusting any of it.</p>'
+            '<div class="stats">' + "".join(cards) + "</div></section>")
+
 def model_section(run, idx, colour=None):
     r = run.get("results") or {}
     m = run.get("model") or "?"
@@ -532,8 +601,16 @@ def model_section(run, idx, colour=None):
                           f'wait at {deep["prompt_tokens"]:,} tokens of prompt'))
     if th.get("on") and th.get("off") and th["off"].get("wall_s"):
         ratio = th["on"]["wall_s"] / th["off"]["wall_s"]
-        cards.append(stat(f'{ratio:.1f}<span class="u">x</span>', "reasoning tax",
-                          "wall clock, thinking on against off"))
+        # Below 1 is not a tax. Qwen3.8-27B answers in half the wall time
+        # with thinking on, because having thought it writes a much shorter
+        # answer. Calling that a 0.5x tax told the reader the opposite of
+        # what happened.
+        cards.append(stat(
+            f'{ratio:.1f}<span class="u">x</span>',
+            "reasoning tax" if ratio >= 1 else "reasoning saving",
+            "wall clock, thinking on against off"
+            if ratio >= 1 else
+            "wall clock: thinking on finished sooner than thinking off"))
     # The other nine classes. Thirty-two of the fifty-two models on this box
     # are not chat models, and until now every one of them appeared here with
     # a header, a provenance line and no number at all: the figures existed in
@@ -634,11 +711,28 @@ def model_section(run, idx, colour=None):
                  f'{on.get("out_tokens", 0):,} tokens')]
         extra = (on.get("out_tokens", 0) - off.get("out_tokens", 0))
         secs = (on.get("wall_s") or 0) - (off.get("wall_s") or 0)
-        cap = (f'Reasoning added <b>{secs:.1f}s</b> and {extra:,} tokens to the same '
-               f'question. At {(on.get("decode_tok_s") or 0):.0f} tok/s that is the '
-               f'model thinking rather than the box slowing down: the decode rate barely '
-               f'moved, {(off.get("decode_tok_s") or 0):.0f} against '
-               f'{(on.get("decode_tok_s") or 0):.0f} tok/s.')
+        d_off = off.get("decode_tok_s") or 0
+        d_on = on.get("decode_tok_s") or 0
+        # A tenth of a second and no token difference is not a saving, it is
+        # the same answer twice. Saying "0.1s sooner and 0 fewer tokens"
+        # dresses noise up as a finding.
+        if abs(secs) < 1.0 and abs(extra) < 20:
+            cap = (f'Thinking on and off came out the same, within '
+                   f'{abs(secs):.1f}s and {abs(extra)} tokens. Either this '
+                   f'model does not reason on this prompt, or it ignores the '
+                   f'switch. Nothing here is a cost.')
+        elif secs >= 0:
+            cap = (f'Reasoning added <b>{secs:.1f}s</b> and {extra:,} tokens to the '
+                   f'same question. The decode rate barely moved, {d_off:.0f} '
+                   f'against {d_on:.0f} tok/s, so that is the model thinking '
+                   f'rather than the box slowing down.')
+        else:
+            cap = (f'Thinking finished <b>{abs(secs):.1f}s sooner</b> and used '
+                   f'{abs(extra):,} fewer tokens than not thinking. That is not a '
+                   f'measurement error: having reasoned, the model writes a much '
+                   f'shorter answer, and the reasoning tokens are counted in the '
+                   f'total. The decode rate barely moved, {d_off:.0f} against '
+                   f'{d_on:.0f} tok/s.')
         parts.append(
             '<div class="panel"><div class="ptitle">What reasoning costs</div>'
             '<p class="lede">The same question asked twice. Hidden reasoning tokens are '
@@ -688,13 +782,10 @@ def model_section(run, idx, colour=None):
     strip = chips([
         ("peak NPU", f'{during["npu_util_peak"]:.0f}%' if during.get("npu_util_peak") else None),
         ("median NPU", f'{during["npu_util_median"]:.0f}%' if during.get("npu_util_median") is not None else None),
-        ("NPU memory at peak",
-         (f'{during["npu_mem_peak_mb"]:,.0f} of '
-          f'{during.get("npu_mem_total_mb") or before.get("npu_mem_total_mb") or 0:,.0f} MB')
-         if during.get("npu_mem_peak_mb") and
-            (during.get("npu_mem_total_mb") or before.get("npu_mem_total_mb"))
-         else (f'{during["npu_mem_peak_mb"]:,.0f} MB'
-               if during.get("npu_mem_peak_mb") else None)),
+        # A denominator only when the device held it still and it is actually
+        # bigger than the peak. It reported "9,712 of 2,497 MB" on a public
+        # page, which is not a thing that can happen.
+        ("NPU memory at peak", _mem_chip(during, before)),
         ("CPU after", f'{after["cpu_total_pct"]:.0f}%' if after.get("cpu_total_pct") else None),
         ("samples", during.get("samples")),
     ])
@@ -1366,6 +1457,7 @@ def build(outdir: pathlib.Path, dest: pathlib.Path, cat=None, device=None):
            if newest.get("build") else "")
         + '</div></header>')
 
+    body.append(conditions_block(runs))
     body.append(cross_model(runs, cat))
     colours = model_colours([r.get("model") for r in runs if r.get("model")])
     body.append('<div class="runsintro"><h2>Every run</h2>'

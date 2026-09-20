@@ -276,3 +276,24 @@ class TestChartsFit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImpossibleNumbersDoNotGetPrinted(unittest.TestCase):
+    """A public page showed "9,712 of 2,497 MB" for NPU memory at peak, and a
+    "reasoning tax" of 0.5x on a model that finished sooner with thinking on.
+    Neither was a rendering slip: the first trusted a device field that moves,
+    the second assumed reasoning can only cost."""
+
+    def test_no_denominator_when_the_total_is_below_the_peak(self):
+        self.assertEqual(
+            report._mem_chip({"npu_mem_peak_mb": 9712, "npu_mem_total_mb": 2497}, {}),
+            "9,712 MB")
+
+    def test_a_believable_total_is_still_shown(self):
+        self.assertEqual(
+            report._mem_chip({"npu_mem_peak_mb": 9712, "npu_mem_total_mb": 15460}, {}),
+            "9,712 of 15,460 MB")
+
+    def test_no_total_at_all_is_fine(self):
+        self.assertEqual(report._mem_chip({"npu_mem_peak_mb": 512}, {}), "512 MB")
+        self.assertIsNone(report._mem_chip({}, {}))
