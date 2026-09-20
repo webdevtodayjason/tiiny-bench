@@ -237,6 +237,37 @@ class TestOCRNotLoaded(DeviceCase):
         self.assertIn("was resident",
                       bench.t_ocr(bench.key(), OCR)["not_measured"])
 
+    def test_an_empty_route_that_refuses_by_name_reaches_the_same_answer(self):
+        # The same 400 model_not_found arrives for two opposite reasons, and
+        # which one it is depends entirely on whether the request named a
+        # model. Named: the route has no model by that name, and OCR may be
+        # working fine one call either side of it. Unnamed: the route picked
+        # for itself and came up empty, which is the box having no OCR.
+        # Before this was split, the unnamed case fell through every branch
+        # and returned a bare null - the exact failure this test exists for.
+        self.state.ocr_empty_is_400 = True
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertIsNotNone(out, "an unnamed model_not_found returned a bare null")
+        self.assertIn("was resident", out["not_measured"])
+
+    def test_a_name_the_route_lacks_is_not_read_as_an_empty_box(self):
+        self.assertEqual(bench._ocr_verdict(
+            {"_error": "400", "_status": 400,
+             "_body": '{"error":{"code":"model_not_found"}}'},
+            named="no-such-ocr"), "unknown_name")
+        self.assertEqual(bench._ocr_verdict(
+            {"_error": "400", "_status": 400,
+             "_body": '{"error":{"code":"model_not_found"}}'}), "no_model")
+
+    def test_a_request_the_box_will_never_take_is_not_retried_as_busy(self):
+        # An empty body and a bad base64 image are stated refusals. Sleeping
+        # fifteen seconds to ask twice more gets the same sentence back.
+        for body in ('{"detail":"Empty request body"}',
+                     '{"error":{"code":"invalid_request",'
+                     '"message":"image is not valid base64"}}'):
+            self.assertEqual(bench._ocr_verdict(
+                {"_error": "400", "_status": 400, "_body": body}), "bad_request")
+
 
 class TestOCRRecordsWhatItRead(DeviceCase):
     """A number on its own does not say who produced it.

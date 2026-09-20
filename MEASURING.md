@@ -149,24 +149,37 @@ The model is loaded. It is answering other requests while it says that. The
 refusal is true in its own terms and reads as false, and this test believed it
 for a month because it read the status and not the sentence.
 
-### Four sentences arrive as one failure
+### Six sentences arrive as one failure
 
-The reason this went unnoticed so long is that `/v1/ocr` says no in four
+The reason this went unnoticed so long is that `/v1/ocr` says no in six
 different ways and they had all been flattened into a null:
 
 | what comes back | what it means |
 |---|---|
 | `503 {"error":{"type":"service_unavailable"}}` | nothing of this class is resident. A gap in the sweep. |
-| `400 model_not_found` | the route does not know that name. Ask again with no name. |
+| `400 model_not_found`, **naming a model** | the route has no model under that name. OCR may be working perfectly. Ask again with no name. |
+| `400 model_not_found`, **naming nobody** | the route picked for itself and came up empty. Nothing is resident. |
+| `400` anything else | an empty body, an image that is not base64. The box is refusing what this app sent. **A fault here**, and asking twice more gets the same sentence. |
 | `404 {"error":"Endpoint not found"}` | the OCR server behind the gateway does not implement the route. **A fact about the model.** |
 | `404 {"detail":"Not Found"}` | the gateway has no such route. **A fact about the box.** |
 | `500 Internal Server Error`, as plain text | the box is busy. Not an answer at all. |
 
-The two 404s are the pair that cost the month. They differ only in the envelope,
-they mean opposite things, and one of them is a publishable finding about a
-model somebody is about to spend units on. `_ocr_verdict` is that table, and it
-is the only place in this suite where a status code is read together with its
-body before either is acted on.
+Two pairs in that table are separated by something other than the status line,
+and both separations are load-bearing.
+
+The 404s differ only in the envelope, they mean opposite things, and one of them
+is a publishable finding about a model somebody is about to spend units on.
+
+The two `model_not_found` rows are the same bytes, and what tells them apart is
+not in the response at all - it is **what the request asked for**. Naming
+`no-such-ocr` on this box returns `model_not_found` while PP-OCRv6 answers a
+correct call a millisecond either side of it. So that status never means "the
+box has no OCR" on its own; it means that only when the request named nobody
+and the route still found nothing to hand the page to. `_ocr_verdict` takes the
+name that was sent as an argument for exactly this reason, and an early version
+of the fix that did not, dropped the unnamed case through every branch and
+returned a bare null - which is the failure this whole document is about,
+rebuilt from scratch inside its own repair.
 
 ### The gateway round-robins, so a number needs a name attached
 
@@ -184,8 +197,19 @@ Every OCR record carries `asked_for` and `answered_by` separately, and they are
 different strings on this box.
 
 A theory that did not survive: that any unrecognised field made the route 404.
-Eight calls carrying `lang` and `detect_orientation` all answered 200. Unknown
-fields are ignored. The 404s that theory was built on were the round-robin.
+Eight calls carrying `lang` and `detect_orientation` all answered 200, as does
+one carrying a field invented on the spot. Unknown fields are simply ignored.
+Every probe that built the field theory was run while GLM-OCR happened to be
+resident, so the theory was fitted to the round-robin.
+
+That is the reusable part, and it is worth more than the OCR finding:
+
+**When identical calls alternate between working and failing, suspect two
+backends before theorising about the request.** A request-shape theory explains
+a consistent failure. It cannot explain an alternating one, and reaching for it
+anyway means fitting a story to every other data point. The tell is the pattern,
+not the payload: same bytes in, different bytes out, is a property of who
+answered.
 
 ### Busy is not unwilling
 
@@ -200,3 +224,40 @@ waiting for a box that has already answered is just a slower wrong number.
 
 Rule: **before recording that something cannot be done, check whether the box
 said it cannot be done, or only that it could not right then.**
+
+### Seconds per page is a function of the page
+
+The 4.05 s above is one 780x170 page of digits. It does not generalise, and a
+figure quoted without the page size is not a measurement of anything. Measured
+on the same box the same evening, one page at a time, by the documents app
+rather than by this suite:
+
+| page | seconds |
+|---|---|
+| 724x274 | 2.6 |
+| 672x1380, 251 boxes | 6.9 |
+| 1140x2520 | 10.4 |
+| 3084x6340 | 17.8, and no 413 |
+
+Roughly linear in pixels once past the fixed cost. Every OCR record this suite
+writes carries `page_px` beside `s_per_page` so the number can be read against
+the page it came off.
+
+It is a function of who else is using the box, too. The same 780x170 page, the
+same model, three times in one evening: **4.05 s** with only the OCR model
+resident, **4.53 s** with four other models loaded, **6.43 s** while two other
+apps were actively driving inference. The confidence and the text were identical
+in all three. The box runs one inference at a time, so this is queueing rather
+than the model slowing down, and `conditions_at_start` on every record is what
+says which of the three a reader is looking at.
+
+### Untested: whether a pinned name makes two OCR models safe to co-host
+
+`model` takes the served alias, and pinning it should in principle stop the
+gateway round-robining a sweep across two models. If it holds, two OCR models
+could be resident at once without corrupting a measurement.
+
+**Not tested.** Proving it requires GLM-OCR resident, and on the evening this
+was written another app depended on the route staying clean. It is written down
+as a question, not as a property, because the last thing this route needs is
+another confident sentence nobody checked.

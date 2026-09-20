@@ -2430,15 +2430,17 @@ OCR_TIMEOUT = 240
 OCR_BACKOFF_S = 5
 
 
-def _ocr_verdict(v):
-    """Which of four different things a failed /v1/ocr call actually said.
+def _ocr_verdict(v, named=None):
+    """Which of several things a failed /v1/ocr call actually said.
 
     They arrive as failures and they are not one finding:
 
-      no_model      503 service_unavailable. Nothing of this class is resident,
-                    so there is nothing to measure. A gap in the sweep.
-      unknown_name  400 model_not_found. The route does not know the model by
-                    the name the catalogue prints. Ask again without a name.
+      no_model      503 service_unavailable, or a model_not_found for a request
+                    that named no model at all: the route picked for itself and
+                    came up empty. Nothing of this class is resident, so there
+                    is nothing to measure. A gap in the sweep.
+      unknown_name  400 model_not_found for a request that DID name one. The
+                    route has no model under that name. Ask again without one.
       model_refuses 404 from the OCR server behind the gateway, which answers
                     {"error":"Endpoint not found"}. The route is there and the
                     model sitting behind it does not implement it. A fact about
@@ -2446,8 +2448,18 @@ def _ocr_verdict(v):
       no_route      404 from the gateway itself, which answers
                     {"detail":"Not Found"}. This firmware has no OCR route at
                     all. A fact about the box.
+      bad_request   any other 400 - an empty body, an image that is not base64.
+                    The box is refusing what this app sent, which is a fault
+                    here, and asking again will not change its mind.
 
-    Reading the last two as one thing is how this test came to record the whole
+    `named` is what the request asked for, and it has to be passed, because the
+    same model_not_found means opposite things with and without it. Measured
+    2026-09-19 with PP-OCRv6 loaded and serving: naming `no-such-ocr` answers
+    model_not_found while OCR works perfectly a millisecond either side of it.
+    So that status alone never says the box has no OCR. Only a model_not_found
+    to a request that named nothing says that.
+
+    Reading the two 404s as one thing is how this test came to record the whole
     Image-to-Text class as uncallable. Anything else - a 500, a 502, a timeout,
     a connection the box dropped while two other apps were using it - returns
     None, which means "no answer yet", and the caller waits and asks again.
@@ -2457,8 +2469,10 @@ def _ocr_verdict(v):
     if not_loaded(v):
         return "no_model"
     status, body = v.get("_status"), (v.get("_body") or "")
-    if status == 400 and "model_not_found" in body:
-        return "unknown_name"
+    if status == 400:
+        if "model_not_found" in body:
+            return "unknown_name" if named else "no_model"
+        return "bad_request"
     if status == 404:
         return "no_route" if '"detail"' in body else "model_refuses"
     return None
@@ -2480,7 +2494,7 @@ def _ocr_call(tok, b64, name=None, tries=3):
     body = {"image": b64} if not name else {"model": name, "image": b64}
     for i in range(tries):
         r = api(gw("/v1/ocr"), tok, body, timeout=OCR_TIMEOUT)
-        if "_error" not in r or _ocr_verdict(r):
+        if "_error" not in r or _ocr_verdict(r, name):
             return r
         if i + 1 < tries:
             wait = OCR_BACKOFF_S * 2 ** i
@@ -2544,12 +2558,13 @@ def t_ocr(tok, model):
     for i in range(3):
         t0 = time.time()
         text, how, conf, ms, by = None, None, None, None, None
+        named = pin
         r = _ocr_call(tok, b64, pin)
-        if _ocr_verdict(r) == "unknown_name" and pin:
+        if _ocr_verdict(r, named) == "unknown_name":
             # The name it gave us stopped working mid-sweep. Drop it rather
             # than spend the remaining pages arguing with a validator.
             say(f"    it no longer answers to {pin}; asking without a name")
-            pin, r = None, _ocr_call(tok, b64)
+            pin, named, r = None, None, _ocr_call(tok, b64)
         if "_error" not in r:
             text, conf, ms = _ocr_read(r)
             by, how = r.get("model"), "ocr gateway"
@@ -2562,9 +2577,9 @@ def t_ocr(tok, model):
             # with no OCR model on it is the exception: that is an ordinary
             # condition with a stated reason of its own, not a reply nobody
             # could read, and filing it here would claim a bug in this app.
-            if _ocr_verdict(r) != "no_model":
+            if _ocr_verdict(r, named) != "no_model":
                 capture("ocr", gw("/v1/ocr"), r, _OCR_NOTES.get(
-                    _ocr_verdict(r), "the OCR route did not answer"))
+                    _ocr_verdict(r, named), "the OCR route did not answer"))
             c = api(gw("/v1/chat/completions"), tok, {
                 "model": model, "max_tokens": 64, "messages": [{"role": "user",
                     "content": [
@@ -2589,7 +2604,14 @@ def t_ocr(tok, model):
                         "route left to read a page with")
         wall = time.time() - t0
         if text is None:
-            verdict = _ocr_verdict(r)
+            verdict = _ocr_verdict(r, named)
+            if verdict == "bad_request":
+                # The box turned down what this app sent. That is a fault here
+                # rather than a fact about the model, and it gets a stated
+                # reason rather than a null so a reader knows which it was.
+                say("    the OCR route refused this request; recording what it said")
+                return not_measured("the OCR route refused the request this "
+                                    "benchmark sent: " + (r.get("_body") or "")[:200])
             if verdict == "no_model":
                 say("    no OCR model is resident; nothing to measure")
                 return not_measured("no Image-to-Text model was resident on the device")
@@ -2653,6 +2675,8 @@ _OCR_NOTES = {
                      "does not implement the route",
     "no_route": "the gateway itself has no /v1/ocr route on this firmware",
     "no_model": "no Image-to-Text model was resident",
+    "bad_request": "the OCR route refused the request this benchmark sent, "
+                   "which is a fault here rather than one on the box",
 }
 
 

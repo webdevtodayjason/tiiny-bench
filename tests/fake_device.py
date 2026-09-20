@@ -182,6 +182,10 @@ class FakeState:
         # another app's inference in flight comes back as a plain-text 500 and
         # must be waited out, not written down as a refusal.
         self.ocr_busy_pages = 0
+        # Whether an empty OCR service refuses with model_not_found instead of
+        # the gateway's 503. Both shapes are real and they must reach the same
+        # conclusion.
+        self.ocr_empty_is_400 = False
         # Model ids whose chat completions answer the refusal real firmware
         # gives for a model that has no chat runtime behind it. The OCR
         # fallback path needs a box where BOTH routes say no, and on the
@@ -506,6 +510,18 @@ class FakeHandler(BaseHTTPRequestHandler):
         if self.state.ocr_upstream_404:
             return self._send(404, {"error": "Endpoint not found"})
         if not self._have("Image-to-Text"):
+            # Firmware answers an empty route two ways depending on where the
+            # request died, and both have to land as "nothing resident". The
+            # 503 envelope is the gateway's; model_not_found to a request that
+            # named nobody is the OCR service picking for itself and finding
+            # nothing. Read without checking what was asked for, the second one
+            # is indistinguishable from naming a model that does not exist -
+            # which happens constantly while OCR works perfectly.
+            if self.state.ocr_empty_is_400:
+                return self._send(400, {"error": {
+                    "code": "model_not_found",
+                    "message": "OCR model '%s' is not loaded"
+                               % (body.get("model") or "")}})
             return self._send(503, NOT_LOADED)
         named = body.get("model")
         self.state.ocr_models_asked.append(named)
