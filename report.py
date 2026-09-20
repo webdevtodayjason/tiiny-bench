@@ -654,8 +654,18 @@ def model_section(run, idx, colour=None):
                 extra = f'voice {blk["voice"]}, ' + note
             if key == "ocr" and blk.get("correct") is not None:
                 extra = (f'{blk["correct"]} of {len(blk.get("runs") or [])} '
-                         f'read correctly, ' + note)
+                         f'read correctly'
+                         + (f', {blk["confidence"]:.2f} confident'
+                            if blk.get("confidence") else "")
+                         + (f', answered by {html.escape(str(blk["answered_by"]))}'
+                            if blk.get("answered_by") else "")
+                         + ", " + note)
             cards.append(stat(fmt.format(blk[unit]), lab, extra))
+        elif isinstance(blk, dict) and blk.get("refused"):
+            # Not the same card as "not measured" and not the same finding.
+            # The model was resident, it was asked properly, and it said no.
+            cards.append(stat('<span class="u">refused</span>', key,
+                              blk["refused"]))
         elif isinstance(blk, dict) and blk.get("not_measured"):
             cards.append(stat('<span class="u">not measured</span>', key,
                               blk["not_measured"]))
@@ -769,6 +779,30 @@ def model_section(run, idx, colour=None):
                       'model that was not resident when the sweep reached it '
                       'has nothing to report, which is a different thing from '
                       'a measurement that went wrong.')
+            + "</div>")
+
+    # --- what the box refused outright -----------------------------------
+    # A class that was asked properly and turned down is a result, and for a
+    # month the only thing that told it apart from a class nobody tried was a
+    # null. It gets its own panel because it is the opposite finding from the
+    # one above: nothing was missing, the model would not do the job.
+    turned_down = [(k, v) for k, v in r.items()
+                   if isinstance(v, dict) and v.get("refused")]
+    if turned_down:
+        parts.append(
+            '<div class="panel"><div class="ptitle">Refused</div>'
+            + "".join(
+                f'<p class="lede"><b>{html.escape(k)}</b>: '
+                f'{html.escape(v["refused"])}.'
+                + (f'<br><span class="mono">{html.escape(str(v.get("status") or ""))} '
+                   f'{html.escape((v.get("body") or "")[:300])}</span>'
+                   if v.get("body") else "")
+                + '</p>' for k, v in turned_down)
+            + caption('The model was resident and the route was asked the way '
+                      'it asks to be asked. This is a fact about the model '
+                      'rather than a gap in the sweep, and it is what somebody '
+                      'about to spend NPU units on it would want to know. What '
+                      'the device said is printed verbatim.')
             + "</div>")
 
     # --- a response this app could not read ------------------------------
@@ -1204,6 +1238,16 @@ def markdown(outdir: pathlib.Path, cat=None) -> str:
             L += [f"- `{k}`: {why}." for k, why in absent]
             L += ["", "Not a failed measurement: a class of model that was not "
                       "resident when the sweep reached it has nothing to report.", ""]
+        turned_down = [(k, v) for k, v in res.items()
+                       if isinstance(v, dict) and v.get("refused")]
+        if turned_down:
+            L += ["**Refused**", ""]
+            L += [f"- `{k}`: {v['refused']}."
+                  + (f" The device said `{v.get('status') or ''} "
+                     f"{(v.get('body') or '')[:200]}`." if v.get("body") else "")
+                  for k, v in turned_down]
+            L += ["", "The model was resident and was asked properly. That is a "
+                      "fact about the model, not a gap in the sweep.", ""]
         odd = r.get("unparsed") or {}
         if odd:
             L += ["**A reply this could not read**", "",

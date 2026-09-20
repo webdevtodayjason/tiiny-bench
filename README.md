@@ -43,7 +43,7 @@ to pick.
 | **Text-to-Speech** | Three passages spoken, duration read off the WAV header. | times faster than real time |
 | **Text Embedding** | Batches of 1, 8 and 32. | embeddings per second |
 | **ASR** | Clips of 2, 5 and 10 seconds transcribed. | times faster than real time |
-| **Image-to-Text** | A generated page of digits read three times, through the OCR gateway or through chat completions, whichever answers. | seconds per page |
+| **Image-to-Text** | A generated page of digits read three times, through the OCR gateway or through chat completions, whichever answers. The reply says which model read it, and that is recorded rather than assumed. | seconds per page |
 | **Music Generation** | 8 and 16 seconds asked for, blocking or polled. | seconds of audio per second of wall clock |
 | **Text Reranking** | 4, 16 and 64 passages scored against one query. | query-document pairs per second |
 

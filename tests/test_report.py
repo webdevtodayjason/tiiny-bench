@@ -125,6 +125,80 @@ class TestComputedCaptions(Fixture):
         self.assertIn("1,000 tokens", page)   # 1500 against 500
 
 
+class TestRefusedIsNotUnmeasured(unittest.TestCase):
+    """Two classes of null that mean opposite things.
+
+    A class nobody could ask has a gap. A class that was asked properly and
+    said no has a result. For a month the page printed both as a dash, so a
+    model that cannot do the job and a model nobody got round to looked the
+    same to a reader deciding what to install.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = pathlib.Path(self.tmp.name)
+        (self.dir / "20260919-000000-suite-ocr.json").write_text(json.dumps({
+            "label": "ocr", "stamp": "20260919-000000", "build": "0.1.34",
+            "models": [
+                {"model": "vendor/reads-pages", "type": "Image-to-Text",
+                 "npu_usage": 1, "elapsed_s": 12, "results": {"ocr": {
+                     "s_per_page": 4.05, "correct": 3, "confidence": 0.9911,
+                     "answered_by": "pp-ocrv6", "chars": 8,
+                     "runs": [{"wall_s": 4.05, "correct": True}] * 3}}},
+                {"model": "vendor/will-not", "type": "Image-to-Text",
+                 "npu_usage": 4, "elapsed_s": 3, "results": {"ocr": refusal()}},
+                {"model": "vendor/nothing-resident", "type": "Image-to-Text",
+                 "npu_usage": 4, "elapsed_s": 1, "results": {"ocr": {
+                     "not_measured": "no Image-to-Text model was resident "
+                                     "on the device"}}}]}), encoding="utf-8")
+
+    def html(self):
+        dest = self.dir / "out.html"
+        report.build(self.dir, dest)
+        return dest.read_text(encoding="utf-8")
+
+    def test_the_class_shows_its_measurement_rather_than_a_dash(self):
+        page = self.html()
+        self.assertIn("4.05", page)
+        self.assertIn("per page", page)
+        self.assertIn("answered by pp-ocrv6", page,
+                      "the page does not say which model produced the number")
+        self.assertIn("0.99 confident", page)
+
+    def test_a_model_that_turned_the_job_down_reads_as_refusing(self):
+        page = self.html()
+        self.assertIn("refused", page)
+        self.assertIn("does not implement /v1/ocr", page)
+        self.assertIn("Endpoint not found", page,
+                      "the refusal is shown without what the device said")
+
+    def test_the_two_kinds_of_null_do_not_share_a_panel(self):
+        page = self.html()
+        self.assertIn(">Refused<", page)
+        self.assertIn(">Not measured<", page)
+        # The refusal must not be filed under the panel that says a class had
+        # nothing to report, which is what made this invisible.
+        gap = page[page.index(">Not measured<"):]
+        self.assertNotIn("does not implement /v1/ocr", gap[:1200])
+
+    def test_the_markdown_export_makes_the_same_distinction(self):
+        md = report.markdown(self.dir)
+        self.assertIn("**Refused**", md)
+        self.assertIn("does not implement /v1/ocr", md)
+        self.assertIn("Endpoint not found", md)
+
+
+def refusal():
+    """The record bench.refused builds, spelled out so this test fails if the
+    shape drifts away from the one the report reads."""
+    return bench.refused("this model does not implement /v1/ocr: the route is "
+                         "there and answers for other models, and this one was "
+                         "resident and would not read a page",
+                         {"_status": 404,
+                          "_body": '{"error":"Endpoint not found"}'})
+
+
 class TestStableColour(unittest.TestCase):
     def test_a_model_keeps_its_colour_when_the_set_changes(self):
         few = report.model_colours(["a/one", "b/two"])

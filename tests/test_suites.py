@@ -238,6 +238,113 @@ class TestOCRNotLoaded(DeviceCase):
                       bench.t_ocr(bench.key(), OCR)["not_measured"])
 
 
+class TestOCRRecordsWhatItRead(DeviceCase):
+    """A number on its own does not say who produced it.
+
+    The route names the model it served in the reply, and that name is not the
+    catalogue id: PP-OCRv6-Medium answers as pp-ocrv6. With two OCR models
+    resident the gateway round-robins, so a sweep that assumed the model it
+    asked for was the model that answered would credit the wrong one.
+    """
+    loaded = [OCR]
+
+    def test_the_model_that_answered_is_read_off_the_reply(self):
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertEqual(out["answered_by"], self.state.ocr_serving_name)
+        self.assertEqual(out["asked_for"], OCR)
+        self.assertNotEqual(out["answered_by"], out["asked_for"],
+                            "the name in the reply was taken from the request")
+
+    def test_it_records_what_came_off_the_page_not_only_how_long_it_took(self):
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertEqual(out["chars"], len(bench.OCR_DIGITS))
+        self.assertAlmostEqual(out["confidence"], 0.98, places=3)
+        self.assertGreater(out["device_ms"], 0)
+
+    def test_it_pins_the_name_the_device_gave_it(self):
+        # The first page cannot name a model, because the only place the
+        # serving name appears is in a reply. Every page after it can, and
+        # must, or the gateway is free to answer from a different model.
+        bench.t_ocr(bench.key(), OCR)
+        asked = self.state.ocr_models_asked
+        self.assertIsNone(asked[0], "the first page named a model it could not know")
+        self.assertEqual(asked[1:], [self.state.ocr_serving_name] * 2)
+
+
+class TestOCRRefusalIsNotAnAbsence(DeviceCase):
+    """The finding this whole test was rewritten for.
+
+    A model that will not serve the route and a box with no OCR on it read the
+    same in a result file as a null, and they are opposite findings: one is a
+    fact about the model, the other is a gap in the sweep.
+    """
+    loaded = [OCR]
+
+    def test_a_model_that_does_not_serve_the_route_is_recorded_as_refusing(self):
+        self.state.ocr_upstream_404 = True
+        self.state.chat_refuses = (OCR,)
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertIn("does not implement", out["refused"])
+        self.assertNotIn("not_measured", out)
+        self.assertEqual(out["status"], 404)
+        self.assertIn("Endpoint not found", out["body"],
+                      "the refusal was recorded without what it said")
+
+    def test_a_firmware_with_no_ocr_route_is_a_different_finding(self):
+        # Same 404, different envelope, opposite conclusion: this one is the
+        # gateway's own and means the box has no such route for anybody.
+        self.state.ocr_gateway = False
+        self.state.chat_refuses = (OCR,)
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertIn("no /v1/ocr route", out["not_measured"])
+        self.assertNotIn("refused", out)
+
+    def test_the_refusal_body_is_captured_even_when_the_fallback_rescues_it(self):
+        # The rule the suite runs on: keep the body of every failed response.
+        # A refusal the chat fallback saved is still a refusal and still the
+        # only evidence that this model cannot serve the route.
+        bench.UNPARSED.clear()
+        self.state.ocr_upstream_404 = True
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertEqual(out["via"], "chat completions")
+        self.assertEqual(out["route_refusals"], 3)
+        self.assertEqual(out["route_said"], "model_refuses")
+        self.assertIn("Endpoint not found", bench.UNPARSED["ocr"]["body"])
+
+
+class TestOCRBusyBoxIsNotARefusal(DeviceCase):
+    """Two other apps share this device and it runs one inference at a time.
+
+    A 500 while somebody else's inference is in flight is the box being busy.
+    Writing that down as a refusal is the same class of mistake as reading a
+    404 as a missing route, and it is the one this test guards.
+    """
+    loaded = [OCR]
+
+    def setUp(self):
+        super().setUp()
+        saved = bench.OCR_BACKOFF_S
+        bench.OCR_BACKOFF_S = 0.01
+        self.addCleanup(setattr, bench, "OCR_BACKOFF_S", saved)
+
+    def test_a_busy_box_is_waited_out_rather_than_written_down(self):
+        self.state.ocr_busy_pages = 2
+        out = bench.t_ocr(bench.key(), OCR)
+        self.assertEqual(out["correct"], 3)
+        self.assertEqual(out["route_refusals"], 0,
+                         "a busy box was recorded as having refused")
+
+    def test_a_name_the_route_stops_knowing_is_dropped_rather_than_argued_with(self):
+        # 400 model_not_found is the refusal that reads most like a missing
+        # model while the model sits there loaded. Ask again without the name.
+        out = bench.t_ocr(bench.key(), OCR)
+        self.state.ocr_serving_name = "pp-ocrv6"
+        again = bench.t_ocr(bench.key(), OCR)
+        self.assertEqual(out["answered_by"], "glm-ocr")
+        self.assertEqual(again["answered_by"], "pp-ocrv6")
+        self.assertEqual(again["correct"], 3)
+
+
 # ------------------------------------------------------------------ music
 
 class TestMusicDirect(DeviceCase):

@@ -2230,6 +2230,26 @@ def not_measured(reason):
     return {"not_measured": reason}
 
 
+def refused(reason, v=None):
+    """What a test returns when the box answered properly and said no.
+
+    Not the same finding as not_measured and it took a month to learn the
+    difference. not_measured means there was nothing of that class on the box
+    to ask, which is ordinary on a device with one accelerator. refused means
+    the model WAS resident, it was asked the way it asks to be asked, and it
+    will not do the job. The first is a gap in the sweep. The second is a fact
+    about the model, and it is the kind of fact somebody installing from the
+    store would want to know before spending the units.
+
+    The body travels with it, because the body is the finding.
+    """
+    rec = {"refused": reason, "status": None, "body": None}
+    if isinstance(v, dict):
+        rec["status"] = v.get("_status")
+        rec["body"] = (v.get("_body") or v.get("_error") or "")[:MAX_CAPTURE]
+    return rec
+
+
 # First unexpected response per test per run. A large audio or image payload
 # would bloat a result file, so it is truncated; the status, the path and the
 # content type go with it because those are usually enough on their own.
@@ -2399,27 +2419,152 @@ def t_asr(tok, model):
             "returned_text": any(r["chars"] for r in rows)}
 
 
+# The gateway caps a request at 220 seconds. A client timeout above that cap
+# means the box's own sentence arrives before ours does, and this test is
+# entirely about reading the box's sentence rather than guessing at it.
+OCR_TIMEOUT = 240
+# First pause before asking a busy box again, doubling per attempt. A knob and
+# not a literal because the tests drive a fake that is never busy for long, and
+# a suite that sleeps fifteen real seconds to prove a retry is a suite people
+# stop running.
+OCR_BACKOFF_S = 5
+
+
+def _ocr_verdict(v):
+    """Which of four different things a failed /v1/ocr call actually said.
+
+    They arrive as failures and they are not one finding:
+
+      no_model      503 service_unavailable. Nothing of this class is resident,
+                    so there is nothing to measure. A gap in the sweep.
+      unknown_name  400 model_not_found. The route does not know the model by
+                    the name the catalogue prints. Ask again without a name.
+      model_refuses 404 from the OCR server behind the gateway, which answers
+                    {"error":"Endpoint not found"}. The route is there and the
+                    model sitting behind it does not implement it. A fact about
+                    the model.
+      no_route      404 from the gateway itself, which answers
+                    {"detail":"Not Found"}. This firmware has no OCR route at
+                    all. A fact about the box.
+
+    Reading the last two as one thing is how this test came to record the whole
+    Image-to-Text class as uncallable. Anything else - a 500, a 502, a timeout,
+    a connection the box dropped while two other apps were using it - returns
+    None, which means "no answer yet", and the caller waits and asks again.
+    """
+    if not isinstance(v, dict) or "_error" not in v:
+        return None
+    if not_loaded(v):
+        return "no_model"
+    status, body = v.get("_status"), (v.get("_body") or "")
+    if status == 400 and "model_not_found" in body:
+        return "unknown_name"
+    if status == 404:
+        return "no_route" if '"detail"' in body else "model_refuses"
+    return None
+
+
+def _ocr_call(tok, b64, name=None, tries=3):
+    """One page through the OCR route, waiting out a box someone else is using.
+
+    The device runs one inference at a time and is rarely this app's alone, so
+    a 500, a 502 or a dropped connection here says the box is busy, not that
+    the model will not do the job. Recording one as a refusal is the exact
+    mistake this whole test exists to stop making, so anything that is not one
+    of the four sentences above is tried again after a pause.
+
+    name pins the model once the device has told us what it calls it. With two
+    OCR models resident the gateway round-robins, so an unpinned sweep can time
+    one model and credit the other.
+    """
+    body = {"image": b64} if not name else {"model": name, "image": b64}
+    for i in range(tries):
+        r = api(gw("/v1/ocr"), tok, body, timeout=OCR_TIMEOUT)
+        if "_error" not in r or _ocr_verdict(r):
+            return r
+        if i + 1 < tries:
+            wait = OCR_BACKOFF_S * 2 ** i
+            say(f"    the box did not answer ({str(r.get('_status') or r.get('_error'))[:40]}); "
+                f"waiting {wait}s and asking again")
+            time.sleep(wait)
+    return r
+
+
+def _ocr_read(payload):
+    """(text, mean confidence, the device's own milliseconds) from a reply.
+
+    PP-OCRv6 answers data[i].lines[], a text and a score per line, with a
+    data[i].timing.elapsed_ms beside them. Those are read where they sit,
+    because a confidence cannot be recovered by walking a payload for strings
+    and neither can the device's own clock, which is the figure that excludes
+    this app's own encoding and the wire.
+
+    A reply shaped some other way falls back to _ocr_text, which still answers
+    the only question the first version of this test asked: did the digits
+    come back.
+    """
+    lines, ms = [], None
+    for item in (payload.get("data") or []) if isinstance(payload, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        ms = (item.get("timing") or {}).get("elapsed_ms") or ms
+        for line in item.get("lines") or []:
+            if isinstance(line, dict) and line.get("text") is not None:
+                lines.append((str(line["text"]), line.get("score")))
+    if not lines:
+        return _ocr_text(payload), None, ms
+    scores = [s for _, s in lines if isinstance(s, (int, float))]
+    return (" ".join(t for t, _ in lines),
+            round(statistics.mean(scores), 4) if scores else None, ms)
+
+
 def t_ocr(tok, model):
-    """Seconds per page, and whether the digits on the page came back.
+    """Seconds per page, what came back off it, and which model answered.
 
     Two kinds of model wear this class on the box: a vision language model that
     will read the page through chat completions, and a dedicated OCR server
     behind the gateway's own /v1/ocr route. The gateway is tried first and chat
     second, and whichever answered is recorded, because "two seconds a page" is
     not comparable between the two paths and the record has to say which it was.
+
+    The route is asked with the image and nothing else. It does take a model,
+    but only under the name it serves that model by - pp-ocrv6, which appears
+    nowhere in the catalogue - so naming the catalogue's id gets a 400 that
+    says the model is not loaded while the model is sitting right there loaded.
+    This test sent that name for a month, read the refusal as an absent route,
+    and published zero seconds of OCR measurement on the strength of it. So the
+    first page is asked unpinned and the reply is read for who answered; the
+    rest are pinned to that name, because with two OCR models resident the
+    gateway round-robins and an unpinned sweep credits the wrong one.
     """
     say("\n  OCR  (seconds per page)")
     page, w, h = _digits_png()
     b64 = base64.b64encode(page).decode()
-    rows, via = [], None
+    rows, via, pin, last, refusals = [], None, None, {}, 0
     for i in range(3):
         t0 = time.time()
-        text, how = None, None
-        r = api(gw("/v1/ocr"), tok,
-                {"model": model, "image": b64}, timeout=300)
+        text, how, conf, ms, by = None, None, None, None, None
+        r = _ocr_call(tok, b64, pin)
+        if _ocr_verdict(r) == "unknown_name" and pin:
+            # The name it gave us stopped working mid-sweep. Drop it rather
+            # than spend the remaining pages arguing with a validator.
+            say(f"    it no longer answers to {pin}; asking without a name")
+            pin, r = None, _ocr_call(tok, b64)
         if "_error" not in r:
-            text, how = _ocr_text(r), "ocr gateway"
+            text, conf, ms = _ocr_read(r)
+            by, how = r.get("model"), "ocr gateway"
+            pin = pin or by
         else:
+            last, refusals = r, refusals + 1
+            # The refusal goes in the record whether or not the fallback
+            # rescues the measurement. Reading this body instead of its status
+            # is the only reason this test measures anything at all now. A box
+            # with no OCR model on it is the exception: that is an ordinary
+            # condition with a stated reason of its own, not a reply nobody
+            # could read, and filing it here would claim a bug in this app.
+            if _ocr_verdict(r) != "no_model":
+                capture("ocr", gw("/v1/ocr"), r, _OCR_NOTES.get(
+                    _ocr_verdict(r), "the OCR route did not answer"))
             c = api(gw("/v1/chat/completions"), tok, {
                 "model": model, "max_tokens": 64, "messages": [{"role": "user",
                     "content": [
@@ -2427,15 +2572,15 @@ def t_ocr(tok, model):
                             "url": "data:image/png;base64," + b64}},
                         {"type": "text",
                          "text": "Read the digits on this page. Reply with the "
-                                 "digits only."}]}]}, timeout=300)
+                                 "digits only."}]}]}, timeout=OCR_TIMEOUT)
             if "_error" not in c:
                 text = (((c.get("choices") or [{}])[0].get("message") or {})
                         .get("content") or "")
-                how = "chat completions"
+                by, how = c.get("model") or model, "chat completions"
             else:
                 # Both paths failed. Record the second one too: printing only
-                # the gateway's 404 hides why the fallback did not work, and
-                # the fallback is the path a vision model would have taken.
+                # the gateway's refusal hides why the fallback did not work,
+                # and the fallback is the path a vision model would have taken.
                 # A separate key, not "ocr": capture keeps the first record
                 # per key, so filing both refusals under one name would throw
                 # away whichever arrived second, and the pair is the finding.
@@ -2444,10 +2589,19 @@ def t_ocr(tok, model):
                         "route left to read a page with")
         wall = time.time() - t0
         if text is None:
-            if not_loaded(r):
+            verdict = _ocr_verdict(r)
+            if verdict == "no_model":
                 say("    no OCR model is resident; nothing to measure")
                 return not_measured("no Image-to-Text model was resident on the device")
-            capture("ocr", gw("/v1/ocr"), r)
+            if verdict == "no_route":
+                say("    this firmware has no OCR route at all")
+                return not_measured("this firmware serves no /v1/ocr route, and "
+                                    "the chat fallback would not read a page either")
+            if verdict == "model_refuses":
+                say("    this model does not serve /v1/ocr; recording the refusal")
+                return refused("this model does not implement /v1/ocr: the route "
+                               "is there and answers for other models, and this "
+                               "one was resident and would not read a page", r)
             say(f"    page {i+1} FAILED {str(r.get('_error'))[:55]}"); continue
         if not _digit_run(text):
             capture("ocr", gw("/v1/ocr"), {"text_returned": text[:400]},
@@ -2456,17 +2610,50 @@ def t_ocr(tok, model):
         via = via or how
         got = _digit_run(text)
         rows.append({"wall_s": round(wall, 2), "via": how, "read": got,
-                     "correct": got == OCR_DIGITS})
+                     "correct": got == OCR_DIGITS, "answered_by": by,
+                     "chars": len(text.strip()), "confidence": conf,
+                     "device_ms": round(ms, 1) if ms else None})
         say(f"    page {i+1}  {wall:6.2f}s  via {how:<16} read {got or '(nothing)'}"
+            + (f"  {conf:.3f} confident" if conf else "")
             + ("  correct" if got == OCR_DIGITS else ""))
     if not rows:
+        # Nothing landed and nothing said why, which on a shared box means the
+        # box was busy for the whole test rather than unwilling. Recorded as a
+        # null so it reads as a test that produced nothing, not as a refusal.
         return None
     med = statistics.median(r["wall_s"] for r in rows)
     hit = sum(1 for r in rows if r["correct"])
-    say(f"    median {med:.2f}s per page, {hit} of {len(rows)} read correctly")
+    confs = [r["confidence"] for r in rows if r["confidence"] is not None]
+    device = [r["device_ms"] for r in rows if r["device_ms"]]
+    answered = [r["answered_by"] for r in rows if r["answered_by"]]
+    say(f"    median {med:.2f}s per page, {hit} of {len(rows)} read correctly"
+        + (f", answered by {answered[0]}" if answered else ""))
     return {"runs": rows, "s_per_page": round(med, 2), "via": via,
-            "expected": OCR_DIGITS, "correct": hit,
-            "page_px": [w, h]}
+            "expected": OCR_DIGITS, "correct": hit, "page_px": [w, h],
+            # Who the device says read the page, which is not the id this test
+            # was handed and must never be filled in from it.
+            "asked_for": model,
+            "answered_by": answered[0] if answered else None,
+            "chars": int(statistics.median(r["chars"] for r in rows)),
+            "confidence": round(statistics.mean(confs), 4) if confs else None,
+            "device_ms": round(statistics.median(device), 1) if device else None,
+            # A page the gateway refused and the fallback rescued is still a
+            # refusal and still evidence. Two OCR models resident make the
+            # gateway round-robin, and a count here short of the page count is
+            # what that looks like from the outside.
+            "route_refusals": refusals,
+            "route_said": _ocr_verdict(last) if last else None}
+
+
+_OCR_NOTES = {
+    "unknown_name": "the OCR route does not know this model by the name the "
+                    "catalogue prints for it, though it is loaded",
+    "model_refuses": "the OCR server behind the gateway answered 404 to a "
+                     "request carrying nothing but the image, so this model "
+                     "does not implement the route",
+    "no_route": "the gateway itself has no /v1/ocr route on this firmware",
+    "no_model": "no Image-to-Text model was resident",
+}
 
 
 def _ocr_text(payload):

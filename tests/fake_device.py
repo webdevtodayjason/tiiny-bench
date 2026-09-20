@@ -167,6 +167,26 @@ class FakeState:
         # is a vision language model has no gateway route and must be read
         # through chat completions instead.
         self.ocr_gateway = True
+        # What the OCR route calls the model it is serving. Deliberately not
+        # the catalogue id and not the display name, because on real firmware
+        # it is neither: PaddlePaddle/PP-OCRv6-Medium answers as "pp-ocrv6",
+        # and naming the catalogue id gets a 400 saying the model is not
+        # loaded while it is sitting there loaded.
+        self.ocr_serving_name = "glm-ocr"
+        # The OCR server behind the gateway does not implement the route. The
+        # gateway still has it, so the 404 comes back with the upstream's own
+        # envelope rather than the gateway's. zai-org/GLM-OCR does this on
+        # real firmware and it is a different finding from having no route.
+        self.ocr_upstream_404 = False
+        # Pages the route refuses before it starts working, for the shared box:
+        # another app's inference in flight comes back as a plain-text 500 and
+        # must be waited out, not written down as a refusal.
+        self.ocr_busy_pages = 0
+        # Model ids whose chat completions answer the refusal real firmware
+        # gives for a model that has no chat runtime behind it. The OCR
+        # fallback path needs a box where BOTH routes say no, and on the
+        # device that is what the second no looks like.
+        self.chat_refuses = ()
         # Music generation either blocks and hands back a file or hands back a
         # session to poll. Both are real shapes on this device, so both are here.
         self.music_async = False
@@ -184,6 +204,10 @@ class FakeState:
         # client sent real work rather than a well-formed empty request.
         self.transcribed = []
         self.ocr_pages = 0
+        # The model name on every /v1/ocr request, in order, so a test can
+        # prove the sweep pinned the name the device gave it rather than
+        # letting the gateway round-robin the pages across two models.
+        self.ocr_models_asked = []
 
     def row(self, model_id):
         for row in CATALOG:
@@ -458,23 +482,57 @@ class FakeHandler(BaseHTTPRequestHandler):
         return self._send(200, {"text": TRANSCRIPT})
 
     def _ocr(self, body):
-        """The gateway route, when the box has one. Shape is the upstream's.
+        """The gateway route, in the four shapes real firmware answers it in.
 
-        Real OCR servers behind this route do not agree on a response shape, so
-        the one here is deliberately nested and oddly named: anything that only
-        works against a flat {"text": ...} is not ready for the device.
+        All four were read off TiinyOS 0.1.34 / service 0.1.30 on 2026-09-19
+        and the differences between them are the whole point of this fake:
+
+          - the gateway with no OCR route at all answers its own 404,
+            {"detail":"Not Found"};
+          - an OCR server that does not implement the route answers the
+            upstream's 404, {"error":"Endpoint not found"};
+          - a model named by anything other than its serving name answers
+            400 model_not_found, while being loaded;
+          - a busy box answers a plain-text 500 that is not a refusal at all.
+
+        A fake that answered all four with one status would let the benchmark
+        go on confusing them, which is exactly what it did for a month.
         """
         if not self.state.ocr_gateway:
-            return self._send(404, {"code": 404, "msg": "Not Found"})
+            return self._send(404, {"detail": "Not Found"})
+        if self.state.ocr_busy_pages:
+            self.state.ocr_busy_pages -= 1
+            return self._send_bytes(500, "text/plain", b"Internal Server Error")
+        if self.state.ocr_upstream_404:
+            return self._send(404, {"error": "Endpoint not found"})
         if not self._have("Image-to-Text"):
             return self._send(503, NOT_LOADED)
+        named = body.get("model")
+        self.state.ocr_models_asked.append(named)
+        if named and named != self.state.ocr_serving_name:
+            return self._send(400, {"error": {
+                "code": "model_not_found",
+                "message": "OCR model '%s' is not loaded" % named}})
         if not (body.get("image") or "").startswith("iVBOR"):
-            return self._send(400, {"error": {"message": "image must be base64 PNG",
-                                              "type": "invalid_request_error"}})
+            return self._send(400, {"error": {
+                "code": "invalid_request",
+                "message": "Field 'input', 'image', or 'images' is required"}})
         time.sleep(OCR_PAGE_S)
         self.state.ocr_pages += 1
-        return self._send(200, {"result": {"ocrResults": [
-            {"prunedResult": {"rec_texts": [OCR_TEXT], "rec_scores": [0.98]}}]}})
+        # data[i].lines[] with a text and a score each, a timing beside them,
+        # and a top-level model naming whoever answered. The nested
+        # {"result": {"ocrResults": ...}} the upstream also carries is kept,
+        # because the reader has to pick the lines out of a payload that has
+        # plenty of other strings in it.
+        return self._send(200, {
+            "object": "ocr.result", "model": self.state.ocr_serving_name,
+            "usage": {"images": 1},
+            "data": [{"index": 0, "line_count": 1,
+                      "lines": [{"text": OCR_TEXT, "score": 0.98,
+                                 "box": [0, 0, 780, 170], "type": "text"}],
+                      "timing": {"elapsed_ms": OCR_PAGE_S * 1000},
+                      "result": {"rec_texts": [OCR_TEXT],
+                                 "rec_scores": [0.98]}}]})
 
     def _music(self, body):
         self.state.music_calls += 1
@@ -603,6 +661,10 @@ class FakeHandler(BaseHTTPRequestHandler):
         model_id = body.get("model")
         with state.guard:
             state.chat_bodies.append(body)
+        if model_id in state.chat_refuses:
+            return self._send(400, {"error": {
+                "message": "Model %s does not support chat" % model_id,
+                "type": "invalid_request_error"}})
         if model_id not in state.loaded or model_id in state.pending:
             # The recorded not-loaded shape. Models never auto-load, and one
             # that is still coming up refuses inference too.

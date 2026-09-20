@@ -36,7 +36,7 @@ Reading the bodies took about twenty minutes and turned those eleven into:
 | `Unsupported speaker: serena. Supported speakers: ['F1', ... 'M5']` | A speech model that works fine, once asked with a speaker it has. The gateway was choosing one it did not have. **The refusal contained the answer.** |
 | `custom_voice is not supported by this model` | Two speech models that genuinely cannot be driven through this route. A real finding, and a different one from the line above. |
 | `502 Bad Gateway` | Not broken at all. The device lists a model as running before its runtime accepts connections. Both models measured fine on a second attempt. |
-| `Endpoint not found` / `Model ... does not support chat` | Four OCR models installable from the store and callable by nothing. |
+| `Endpoint not found` / `Model ... does not support chat` | Read at the time as four OCR models callable by nothing. Wrong, and the correction is the last section of this document: one of the four does not serve the route and the gateway was alternating between it and one that does. |
 
 Four of the eleven became real numbers. Four more became a diagnosis specific
 enough to hand to the vendor. That is the whole return on keeping a string
@@ -116,3 +116,87 @@ What this means for anyone quoting a number: a single tok/s for a model is
 only meaningful with the generation length attached. For most models one
 figure is honest at any length. For these four, quoting the mid-range figure
 overstates long-form work by nearly half.
+
+## A 404 is not an answer to the question you asked
+
+Measured 2026-09-19 on one box, TiinyOS 0.1.34, service 0.1.30.
+
+For a month this suite reported **zero seconds of OCR measurement** and treated
+the whole Image-to-Text class as uncallable. Four models installable from the
+store, none of them benchmarkable, written down as a fact about the device. It
+was a fact about this program.
+
+`/v1/ocr` works. It reads a page in about four seconds and reads it correctly:
+
+| | |
+|---|---|
+| seconds per page | **4.05** median of three, 4.03 to 4.12 |
+| the device's own clock | 4013 to 4026 ms, so the wire and the base64 cost about 30 ms |
+| read back | `20260919`, 3 of 3, from a 780x170 generated page |
+| confidence | 0.9911 on every page |
+| answered by | `pp-ocrv6` |
+| units | 1, out of 100 |
+
+That last row is the trap. The test asked for `PaddlePaddle/PP-OCRv6-Medium`,
+which is what the catalogue calls it, and the route answered as `pp-ocrv6`,
+which is a name that appears nowhere in the catalogue, not as `id` and not as
+`display_name`. Send the catalogue's id and you get:
+
+    400 {"error":{"code":"model_not_found",
+                  "message":"OCR model 'PaddlePaddle/PP-OCRv6-Medium' is not loaded"}}
+
+The model is loaded. It is answering other requests while it says that. The
+refusal is true in its own terms and reads as false, and this test believed it
+for a month because it read the status and not the sentence.
+
+### Four sentences arrive as one failure
+
+The reason this went unnoticed so long is that `/v1/ocr` says no in four
+different ways and they had all been flattened into a null:
+
+| what comes back | what it means |
+|---|---|
+| `503 {"error":{"type":"service_unavailable"}}` | nothing of this class is resident. A gap in the sweep. |
+| `400 model_not_found` | the route does not know that name. Ask again with no name. |
+| `404 {"error":"Endpoint not found"}` | the OCR server behind the gateway does not implement the route. **A fact about the model.** |
+| `404 {"detail":"Not Found"}` | the gateway has no such route. **A fact about the box.** |
+| `500 Internal Server Error`, as plain text | the box is busy. Not an answer at all. |
+
+The two 404s are the pair that cost the month. They differ only in the envelope,
+they mean opposite things, and one of them is a publishable finding about a
+model somebody is about to spend units on. `_ocr_verdict` is that table, and it
+is the only place in this suite where a status code is read together with its
+body before either is acted on.
+
+### The gateway round-robins, so a number needs a name attached
+
+`zai-org/GLM-OCR` never serves the route and answers `Endpoint not found` to a
+correct body. With it and a PaddleOCR model both resident, the gateway
+alternates: six identical calls measured **404, 200, 404, 200, 404, 200**.
+Unload GLM-OCR and the same six are 6 of 6.
+
+Half-failing looks exactly like broken, which is how the original diagnosis
+came to blame the request shape. It is also worse than broken, because the
+calls that *succeed* are credited to whichever model the sweep happened to be
+testing. So the first page is now asked with no model named, the reply is read
+for who actually answered, and the remaining pages are pinned to that name.
+Every OCR record carries `asked_for` and `answered_by` separately, and they are
+different strings on this box.
+
+A theory that did not survive: that any unrecognised field made the route 404.
+Eight calls carrying `lang` and `detect_orientation` all answered 200. Unknown
+fields are ignored. The 404s that theory was built on were the round-robin.
+
+### Busy is not unwilling
+
+Two other apps shared the box during this work and it runs one inference at a
+time. One call in eight came back `500 Internal Server Error` as plain text,
+and the same page read fine on the next attempt. A benchmark that wrote that
+down would publish a refusal for a model that works.
+
+Anything that is not one of the four sentences above is now waited out: three
+attempts, five seconds doubling. A stated refusal returns immediately, because
+waiting for a box that has already answered is just a slower wrong number.
+
+Rule: **before recording that something cannot be done, check whether the box
+said it cannot be done, or only that it could not right then.**
