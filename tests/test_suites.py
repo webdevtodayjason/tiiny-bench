@@ -191,6 +191,51 @@ class TestASRNotLoaded(DeviceCase):
                                "no ASR model was resident on the device"})
 
 
+class TestADeviceBodyIsNotTheShapeItPromised(unittest.TestCase):
+    """not_loaded is a predicate, and a predicate must not raise.
+
+    The device puts an object under "error" on every route this suite drives
+    and a bare string on /v1/ocr: {"error": "Endpoint not found"}. A string has
+    no .get, and the parse guard only ever caught ValueError, so a 503 shaped
+    that way raised AttributeError out of a function whose whole contract is
+    returning True or False.
+
+    The OCR 404 that led here never actually reached it, because the status
+    check returns first. That is luck, not design, and the next route to answer
+    503 with a string would not be so lucky.
+    """
+
+    @staticmethod
+    def fail(status, body):
+        return {"_error": "HTTP Error %d" % status, "_status": status,
+                "_body": body, "_ctype": "application/json"}
+
+    def test_a_bare_string_error_does_not_raise(self):
+        for body in ('{"error": "overloaded"}', '"busy"', '[]', 'null'):
+            self.assertIs(bench.not_loaded(self.fail(503, body)), False, body)
+
+    def test_a_bare_string_that_says_it_still_counts(self):
+        # Reading the sentence rather than discarding it, which is the rule
+        # the rest of this suite runs on.
+        self.assertIs(bench.not_loaded(
+            self.fail(503, '{"error": "No suitable model is currently running."}')),
+            True)
+
+    def test_the_object_shape_still_works(self):
+        self.assertIs(bench.not_loaded(self.fail(
+            503, '{"error": {"message": "No suitable model is currently '
+                 'running.", "type": "service_unavailable"}}')), True)
+
+    def test_the_ocr_404_is_not_read_as_an_absent_model(self):
+        v = self.fail(404, '{"error": "Endpoint not found"}')
+        self.assertIs(bench.not_loaded(v), False)
+        self.assertEqual(bench._ocr_verdict(v), "model_refuses")
+
+    def test_a_body_that_is_not_json_at_all_is_just_false(self):
+        self.assertIs(bench.not_loaded(self.fail(503, "Internal Server Error")),
+                      False)
+
+
 # -------------------------------------------------------------------- OCR
 
 class TestOCRGateway(DeviceCase):

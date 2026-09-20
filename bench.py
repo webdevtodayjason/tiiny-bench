@@ -2212,14 +2212,35 @@ NOT_LOADED_TYPE = "service_unavailable"
 
 
 def not_loaded(v):
-    """Whether a failed call failed because no model of that class is up."""
+    """Whether a failed call failed because no model of that class is up.
+
+    The device is not consistent about what sits under "error". Every route
+    this suite drives puts an object there with a type and a message, and
+    /v1/ocr puts a bare string: {"error": "Endpoint not found"}. A string has
+    no .get, the try below only ever caught ValueError, and so a predicate
+    whose entire job is answering yes or no could raise AttributeError into
+    its caller instead. Measured on 2026-09-19: a 503 carrying
+    {"error": "overloaded"}, or a body that is a bare JSON string, both did.
+
+    The 404 that prompted this never reached the crash, because the status
+    check above returns first, and that is luck rather than design. Anything
+    that reads a device body has to assume the shape it is given is not the
+    shape it was promised.
+    """
     if not isinstance(v, dict) or "_error" not in v:
         return False
     if v.get("_status") != 503:
         return False
     try:
-        err = (json.loads(v.get("_body") or "{}") or {}).get("error") or {}
+        body = json.loads(v.get("_body") or "{}")
     except ValueError:
+        return False
+    err = body.get("error") if isinstance(body, dict) else body
+    if isinstance(err, str):
+        # A bare string still carries the sentence, so read it rather than
+        # discard it. That is the same rule as everywhere else in this file.
+        return "no suitable model" in err.lower()
+    if not isinstance(err, dict):
         return False
     return err.get("type") == NOT_LOADED_TYPE or "no suitable model" in str(
         err.get("message", "")).lower()
