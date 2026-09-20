@@ -41,7 +41,41 @@ import zlib
 VERSION = "0.1.10"
 
 HERE = pathlib.Path(__file__).resolve().parent
-OUT = HERE / "bench-results"
+# Results outlive the install that produced them.
+#
+# They used to live in HERE/bench-results, which is inside the versioned
+# install directory the farm creates per release. So every update started a
+# fresh history, eight directories deep by 0.1.10, and anything written
+# after the new version was staged was simply lost. A benchmark whose whole
+# point is comparing today against last month cannot keep its history
+# somewhere that a routine update abandons.
+#
+# TIINY_BENCH_RESULTS overrides, for a container or a test.
+def _results_dir():
+    override = os.environ.get("TIINY_BENCH_RESULTS")
+    if override:
+        d = pathlib.Path(override).expanduser()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    d = pathlib.Path(os.environ.get("XDG_DATA_HOME")
+                     or pathlib.Path.home() / ".local" / "share")
+    d = d / "tiiny-bench" / "results"
+    d.mkdir(parents=True, exist_ok=True)
+    # One-time rescue: fold in whatever earlier installs left behind, newest
+    # copy of a given filename winning, so upgrading does not look like the
+    # history was deleted.
+    legacy = sorted((pathlib.Path.home() / "tiinyapps" / "tiiny-bench").glob(
+        "*/bench-results/*.json")) if (pathlib.Path.home() / "tiinyapps").exists() else []
+    legacy += sorted((HERE / "bench-results").glob("*.json")) \
+        if (HERE / "bench-results").exists() else []
+    for f in legacy:
+        dest = d / f.name
+        if not dest.exists() or f.stat().st_mtime > dest.stat().st_mtime:
+            dest.write_bytes(f.read_bytes())
+    return d
+
+
+OUT = _results_dir()
 
 # ------------------------------------------------------------------ finding it
 #
