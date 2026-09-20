@@ -70,3 +70,49 @@ inventing a value.
 **A stated reason beats a null.** `not_measured("...")` says which wall the
 test hit. A bare `null` is indistinguishable from a test that never ran, and
 that difference is the whole point of publishing the file.
+
+## A rate needs enough tokens to be a rate
+
+Measured 2026-09-19 across 20 models on one box.
+
+The prefill sweep varies prompt length and generates two tokens per point,
+because what it is timing is the first token. Those points also carry a
+`decode_tok_s`, and that number is not a decode rate. Dividing by a two-token
+sample reads a median **1.89x** the same model's sustained figure, and for a
+while the model page led with it: an inflated headline sitting next to the
+honest one on the same card. The report now leads that card with time to first
+token, which is what the test measures, and quotes a rate only above
+`DECODE_MIN_TOKENS` generated tokens.
+
+Rule: before showing tokens per second, check how many tokens it was divided by.
+
+## Decode rate is a function of generation length, and only for some models
+
+Same 20 models, median tok/s by how many tokens came out:
+
+| generation | most models | the four that sag |
+|---|---|---|
+| 200 to 999 tokens | baseline | baseline |
+| 1000 and over | 0.95 to 0.99x | 0.58 to 0.68x |
+
+Sixteen models lose one to five percent going long, which is the ordinary cost
+of a growing KV cache. Four fall off a cliff:
+
+| model | 200-999 | 1000+ | |
+|---|---|---|---|
+| Qwen/Qwen3-Coder-30B-A3B-Instruct-Turbo | 51.2 | 29.4 | 0.58x |
+| Qwen/Qwen3.8-27B | 19.4 | 11.6 | 0.60x |
+| Qwen/Qwen3.6-27B-Turbo | 21.8 | 13.4 | 0.62x |
+| Qwen/Qwen3.6-35B-A3B-turbo | 47.7 | 32.6 | 0.68x |
+
+Those same four are also the only models whose two-token samples come in
+*below* their sustained rate (0.43 to 0.51x) while the other sixteen come in
+around 1.9x above. Slow to start, fast in the middle, slow again when long, is
+the shape you would expect from speculative decoding: a draft model that needs
+to warm up and whose acceptance rate falls away as context grows. Not proven
+here, but it is the reading that fits all three bands.
+
+What this means for anyone quoting a number: a single tok/s for a model is
+only meaningful with the generation length attached. For most models one
+figure is honest at any length. For these four, quoting the mid-range figure
+overstates long-form work by nearly half.

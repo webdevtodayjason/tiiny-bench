@@ -188,6 +188,11 @@ def bars(rows, ylabel, w=620, h=240, fmt="{:.0f}", colour=None):
 # on the near-black ground and stay apart from each other in greyscale print.
 HUE_STEPS = 30
 
+# Below this many generated tokens, "tokens per second" is an artifact of the
+# sample size rather than a speed. Measured on 2026-09-19 across 20 models: a
+# two-token generation reports a median 1.89x the same model's sustained rate.
+DECODE_MIN_TOKENS = 32
+
 
 def _hue_of(model):
     h = hashlib.sha1((model or "?").encode("utf-8")).digest()
@@ -579,12 +584,22 @@ def model_section(run, idx, colour=None):
     cards = []
     if pf:
         first = min(pf, key=lambda p: p["prompt_tokens"])
-        if first.get("decode_tok_s"):
+        # The prefill sweep measures time to first token against prompt length.
+        # Its generations are a couple of tokens long, and a rate divided by a
+        # two-token sample is not a decode rate: across 20 models those samples
+        # read a median 1.89x the same model's sustained figure. Leading with
+        # that number put an inflated headline next to the honest one on the
+        # same card. Lead with what this test actually measures, and only quote
+        # a rate when enough tokens came out to mean anything.
+        if first.get("ttft_s"):
+            rate = first.get("decode_tok_s")
+            enough = (first.get("out_tokens") or 0) >= DECODE_MIN_TOKENS
             cards.append(stat(
-                f'{first["decode_tok_s"]:.1f}<span class="u">tok/s</span>',
-                "single stream",
-                f'first token after {first.get("ttft_s", 0):.2f}s at '
-                f'{first["prompt_tokens"]:,} tokens in'))
+                f'{first["ttft_s"]:.2f}<span class="u">s</span>',
+                "first token",
+                (f'{first["prompt_tokens"]:,} tokens in, then '
+                 f'{rate:.1f} tok/s' if (rate and enough)
+                 else f'{first["prompt_tokens"]:,} tokens in')))
     if srun.get("decode_tok_s"):
         cards.append(stat(f'{srun["decode_tok_s"]:.1f}<span class="u">tok/s</span>',
                           "sustained decode",
