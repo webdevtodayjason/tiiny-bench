@@ -39,7 +39,7 @@ import urllib.request
 import os
 import zlib
 
-VERSION = "0.1.10"
+VERSION = "0.1.11"
 
 HERE = pathlib.Path(__file__).resolve().parent
 # Results outlive the install that produced them.
