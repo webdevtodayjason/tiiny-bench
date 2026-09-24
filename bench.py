@@ -20,6 +20,7 @@ is already running and leaves the box exactly as it found it. `--all` and
 import argparse
 import base64
 import errno
+import getpass
 import glob
 import hashlib
 import json
@@ -923,13 +924,41 @@ def _tiinyos_keys():
     return sorted(counts, key=lambda c: -counts[c])
 
 
+def account_auth_key(addr, serial, password):
+    """The device's own static API key, straight from the box, no TiinyOS.
+
+    POST /api/v1/account/auth (password + serial) both unlocks /data and
+    hands back `auth_key` -- the same 36-char UUID TiinyOS reads out of its
+    own local storage and calls TIINY_KEY. Confirmed 2026-09-24 against a
+    live device: that value works unmodified as Authorization: Bearer on the
+    model gateway. See ~/code/tiiny/tools/README-unlock.md for how this was
+    found. Returns None rather than raising -- a wrong password here should
+    read as "no key", not crash the caller.
+    """
+    body = json.dumps({"password": password, "device_id": serial}).encode()
+    req = urllib.request.Request(
+        "http://%s/api/v1/account/auth" % addr, data=body, method="POST",
+        headers={"Content-Type": "application/json", "Host": "auth.api.tiiny",
+                 "x-device-id": serial, "accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            out = json.loads(resp.read().decode())
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
+            json.JSONDecodeError, OSError):
+        return None
+    return (out.get("auth_key") or "").strip() or None
+
+
 def key():
     """TIINY_KEY if you set it. Otherwise the farm's, then the saved one, then
-    whatever TiinyOS on this Mac is using.
+    whatever TiinyOS on this Mac is using, then the device's own account API
+    (works on Linux, no TiinyOS needed -- asks for the box's password once
+    and saves the key it returns).
 
-    The scrape is last on purpose and is a convenience for the machine running
-    TiinyOS and nothing more: it reads the app's own local storage and keeps the
-    first candidate the device accepts.
+    The TiinyOS scrape stays ahead of the account-API prompt: it needs no
+    interaction at all on a Mac already running TiinyOS, so it is tried
+    first. The account-API prompt is last and only runs at a terminal --
+    never in a cron job or a script with no one to answer it.
     """
     global KEY_SOURCE
     env = os.environ.get("TIINY_KEY", "").strip()
@@ -948,6 +977,20 @@ def key():
         if "_error" not in api(gw("/api/v1/models/running"), c, timeout=20):
             KEY_SOURCE = "TiinyOS local storage"
             return c
+    if HOST and DEVICE.get("serial") and sys.stdin.isatty():
+        say("  No API key found. This box's own account can hand one over "
+            "-- no TiinyOS needed.")
+        try:
+            password = getpass.getpass("  Tiiny main password (not echoed): ")
+        except (EOFError, KeyboardInterrupt):
+            password = ""
+        got = account_auth_key(HOST, DEVICE["serial"], password) if password else None
+        del password
+        if got:
+            save_config(key=got)
+            KEY_SOURCE = "account API (saved to %s)" % CONFIG
+            return got
+        say("  That didn't work. Falling through to the usual error.")
     sys.exit("No API key. Set TIINY_KEY, paste one into the web UI, "
              "or run this on the Mac running TiinyOS.")
 
